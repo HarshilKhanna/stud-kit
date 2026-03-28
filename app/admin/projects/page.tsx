@@ -6,7 +6,7 @@ import { useProject } from "@/context/ProjectContext";
 import type { Project } from "@/types";
 
 export default function AdminProjectsPage() {
-  const { projects, activeProject, setActiveProject, loading } = useProject();
+  const { projects, setActiveProject, loading } = useProject();
   const [pendingId, setPendingId] = useState<string | null>(null);
 
   const sorted = useMemo(() => [...projects], [projects]);
@@ -42,7 +42,6 @@ export default function AdminProjectsPage() {
       ) : (
         <ul className="divide-y divide-neutral-100 rounded-lg border border-neutral-200 bg-white">
           {sorted.map((p) => {
-            const isActive = activeProject?.id === p.id;
             const busy = pendingId === p.id;
             return (
               <li
