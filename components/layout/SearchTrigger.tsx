@@ -35,7 +35,7 @@ function SearchModal({ onClose }: { onClose: () => void }) {
     return allItems.filter(
       (item) =>
         item.name.toLowerCase().includes(q) ||
-        item.brand.toLowerCase().includes(q) ||
+        (item.brand ?? "").toLowerCase().includes(q) ||
         item.category.toLowerCase().includes(q)
     );
   }, [allItems, query]);
@@ -154,7 +154,7 @@ function SearchModal({ onClose }: { onClose: () => void }) {
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-neutral-900">{item.name}</p>
                         <p className="mt-0.5 text-xs text-neutral-400">
-                          {item.brand} · {item.category}
+                          {[item.brand, item.category].filter(Boolean).join(" · ")}
                         </p>
                       </div>
                     </button>

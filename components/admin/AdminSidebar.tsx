@@ -2,8 +2,18 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Package, BarChart2, ArrowLeft, LogOut, X } from "lucide-react";
+import {
+  LayoutDashboard,
+  Layers3,
+  Package,
+  BarChart2,
+  ArrowLeft,
+  LogOut,
+  X,
+} from "lucide-react";
 import { useAdminAuth } from "@/context/AdminAuthContext";
+import { useProject } from "@/context/ProjectContext";
+import { ProjectSwitcher } from "./ProjectSwitcher";
 
 const NAV = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -21,14 +31,18 @@ interface AdminSidebarProps {
 export function AdminSidebar({ mobileOpen = false, onClose }: AdminSidebarProps) {
   const pathname = usePathname();
   const { logout } = useAdminAuth();
+  const { activeProject } = useProject();
 
   const sidebarContent = (
     <aside className="flex h-full w-60 flex-shrink-0 flex-col border-r border-neutral-200 bg-white">
       {/* Logo row — includes close button on mobile */}
       <div className="flex items-start justify-between px-5 pt-6 pb-4 border-b border-neutral-100">
         <div>
-          <p className="text-sm font-semibold tracking-tight text-neutral-900">UrbanFlatKit</p>
+          <p className="text-sm font-semibold tracking-tight text-neutral-900">StudentKit</p>
           <p className="text-[11px] text-neutral-400 font-light mt-0.5">Admin</p>
+          {activeProject?.name && (
+            <p className="mt-1 text-xs text-neutral-400">{activeProject.name}</p>
+          )}
         </div>
         {onClose && (
           <button
@@ -42,8 +56,10 @@ export function AdminSidebar({ mobileOpen = false, onClose }: AdminSidebarProps)
         )}
       </div>
 
+      <ProjectSwitcher onClose={onClose} />
+
       {/* Nav */}
-      <nav className="flex-1 px-3 pt-4 space-y-0.5">
+      <nav className="flex-1 px-3 pt-2 space-y-0.5">
         {NAV.map(({ href, label, icon: Icon }) => {
           const active = pathname.startsWith(href);
           return (
@@ -67,7 +83,15 @@ export function AdminSidebar({ mobileOpen = false, onClose }: AdminSidebarProps)
       {/* Bottom links */}
       <div className="px-3 pb-5 pt-3 border-t border-neutral-100 space-y-0.5">
         <Link
-          href="/"
+          href="/admin/projects"
+          onClick={onClose}
+          className="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-normal text-neutral-500 transition-colors hover:bg-neutral-50 hover:text-neutral-800"
+        >
+          <Layers3 className="h-4 w-4 flex-shrink-0" />
+          Projects
+        </Link>
+        <Link
+          href="/browse"
           onClick={onClose}
           className="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-normal text-neutral-500 transition-colors hover:bg-neutral-50 hover:text-neutral-800"
         >

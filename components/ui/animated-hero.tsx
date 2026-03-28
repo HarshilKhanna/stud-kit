@@ -3,7 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 // import { motion } from "framer-motion";
 
-const WORDS = ["Furniture", "Lighting", "Decor", "Textiles", "Appliances"];
+const WORDS = [
+  "Bedding",
+  "Kitchen",
+  "Documents",
+  "Electronics",
+  "Comfort",
+];
 const TYPE_MS = 85;
 const HOLD_MS = 1400;
 const DELETE_MS = 50;

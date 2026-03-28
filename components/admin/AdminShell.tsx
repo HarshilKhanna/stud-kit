@@ -11,17 +11,18 @@ interface AdminShellProps {
 }
 
 export function AdminShell({ children }: AdminShellProps) {
-  const { isAuthenticated } = useAdminAuth();
+  const { isAuthenticated, authReady } = useAdminAuth();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
+    if (!authReady) return;
     if (!isAuthenticated) {
       router.replace("/admin/login");
     }
-  }, [isAuthenticated, router]);
+  }, [authReady, isAuthenticated, router]);
 
-  if (!isAuthenticated) return null;
+  if (!authReady || !isAuthenticated) return null;
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -42,7 +43,7 @@ export function AdminShell({ children }: AdminShellProps) {
             <Menu className="h-5 w-5" />
           </button>
           <p className="text-sm font-semibold tracking-tight text-neutral-900">
-            UrbanFlatKit <span className="text-[11px] font-light text-neutral-400">Admin</span>
+            StudentKit <span className="text-[11px] font-light text-neutral-400">Admin</span>
           </p>
         </header>
 

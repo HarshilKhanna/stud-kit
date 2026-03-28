@@ -9,30 +9,37 @@ import {
   ChangeEvent,
 } from "react";
 import { X, Plus, Trash2, Upload } from "lucide-react";
-import { removeBackground } from "@imgly/background-removal";
 import {
   ensureBgRemovalWorker,
   removeBackgroundInWorker,
 } from "@/lib/admin/bgRemovalWorkerClient";
-import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { useData } from "@/context/DataContext";
 import { Item } from "@/types";
-import { storage } from "@/lib/firebase";
+import {
+  FILTER_CATEGORIES,
+  BROWSE_CATEGORY_CHIPS,
+  BROWSE_CHIP_TO_ITEM_CATEGORIES,
+  shortCategoryLabel,
+} from "@/components/browse/FilterBar";
+import {
+  ALL_REGIONS,
+  ALL_ACCOMMODATIONS,
+  ALL_BUDGET_TIERS,
+} from "@/data/studentData";
+import type {
+  Priority,
+  Source,
+  Region,
+  AccommodationType,
+  BudgetTier,
+} from "@/types";
 import {
   PENDING_IMAGE_URL,
   isImagePending,
 } from "@/lib/imagePending";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const CATEGORY_OPTIONS = [
-  "Furniture",
-  "Lighting",
-  "Decor",
-  "Textiles",
-  "Appliances",
-] as const;
 
 const SPEC_LABEL_OPTIONS = [
   "Dimensions",
@@ -46,13 +53,9 @@ const SPEC_LABEL_OPTIONS = [
   "Custom",
 ] as const;
 
-const CATEGORY_ORDER: Record<string, number> = {
-  furniture: 0,
-  lighting: 1,
-  decor: 2,
-  textiles: 3,
-  appliances: 4,
-};
+const CATEGORY_ORDER: Record<string, number> = Object.fromEntries(
+  FILTER_CATEGORIES.map((c, i) => [c.toLowerCase(), i]),
+);
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -68,10 +71,21 @@ type AdminItem = {
   id: string;
   name: string;
   brand: string;
-  category: "Furniture" | "Lighting" | "Decor" | "Textiles" | "Appliances";
+  category: string;
   externalUrl: string;
   imageData: string;
   displayPosition: number | null;
+  priority: Priority;
+  source: Source;
+  relevantRegions: Region[];
+  relevantAccommodations: AccommodationType[];
+  budgetTiers: BudgetTier[];
+  tip: string;
+  availabilityNote: string;
+  indianCommunityNote: string;
+  priceInr: string;
+  priceLocal: string;
+  priceCurrency: string;
   specs: AdminSpecRow[];
 };
 
@@ -94,22 +108,45 @@ function primaryDimension(item: Item): number {
   return Math.max(...nums.map(Number));
 }
 
-function sortItems(items: Item[]): Item[] {
+function baseCategorySort(items: Item[]): Item[] {
   return [...items].sort((a, b) => {
-    const posA = a.displayPosition ?? null;
-    const posB = b.displayPosition ?? null;
-
-    // Pinned items always come first, sorted by position ascending
-    if (posA !== null && posB !== null) return posA - posB;
-    if (posA !== null) return -1;
-    if (posB !== null) return 1;
-
-    // Unpinned: sort by category then dimension descending
     const catA = CATEGORY_ORDER[a.category.toLowerCase()] ?? 99;
     const catB = CATEGORY_ORDER[b.category.toLowerCase()] ?? 99;
     if (catA !== catB) return catA - catB;
     return primaryDimension(b) - primaryDimension(a);
   });
+}
+
+function sortItems(items: Item[]): Item[] {
+  const positioned: Item[] = [];
+  const unpositioned: Item[] = [];
+
+  for (const item of items) {
+    if (
+      typeof item.displayPosition === "number" &&
+      Number.isFinite(item.displayPosition) &&
+      item.displayPosition > 0
+    ) {
+      positioned.push(item);
+    } else {
+      unpositioned.push(item);
+    }
+  }
+
+  const ordered = baseCategorySort(unpositioned);
+  const sortedPositioned = [...positioned].sort((a, b) => {
+    const pa = a.displayPosition as number;
+    const pb = b.displayPosition as number;
+    if (pa !== pb) return pa - pb;
+    return a.id.localeCompare(b.id);
+  });
+
+  for (const item of sortedPositioned) {
+    const insertAt = Math.min(Math.max((item.displayPosition as number) - 1, 0), ordered.length);
+    ordered.splice(insertAt, 0, item);
+  }
+
+  return ordered;
 }
 
 function flattenItems(data: ReturnType<typeof useData>["data"]): Item[] {
@@ -128,11 +165,22 @@ function toAdminItem(item: Item): AdminItem {
   return {
     id: item.id,
     name: item.name,
-    brand: item.brand,
+    brand: item.brand ?? "",
     category: item.category,
     externalUrl: item.externalUrl,
     imageData: item.imageUrl,
     displayPosition: item.displayPosition ?? null,
+    priority: item.priority,
+    source: item.source,
+    relevantRegions: [...item.relevantRegions],
+    relevantAccommodations: [...item.relevantAccommodations],
+    budgetTiers: [...item.budgetTiers],
+    tip: item.tip ?? "",
+    availabilityNote: item.availabilityNote ?? "",
+    indianCommunityNote: item.indianCommunityNote ?? "",
+    priceInr: item.price?.inr != null ? String(item.price.inr) : "",
+    priceLocal: item.price?.local != null ? String(item.price.local) : "",
+    priceCurrency: item.price?.localCurrency ?? "",
     specs,
   };
 }
@@ -147,18 +195,40 @@ function fromAdminItem(a: AdminItem): Item {
       if (row.showOnCard) cardSpecKeys.push(key);
     }
   }
-  return {
+  const inrN = a.priceInr.trim() ? Number(a.priceInr) : NaN;
+  const localN = a.priceLocal.trim() ? Number(a.priceLocal) : NaN;
+  const hasPrice =
+    (Number.isFinite(inrN) && inrN >= 0) ||
+    (Number.isFinite(localN) && localN >= 0) ||
+    Boolean(a.priceCurrency.trim());
+  const price = hasPrice
+    ? {
+        inr: Number.isFinite(inrN) && inrN >= 0 ? inrN : undefined,
+        local: Number.isFinite(localN) && localN >= 0 ? localN : undefined,
+        localCurrency: a.priceCurrency.trim() || undefined,
+      }
+    : undefined;
+  const item: Item = {
     id: a.id,
     name: a.name.trim(),
-    brand: a.brand.trim(),
-    category: a.category,
-
+    brand: a.brand.trim() || undefined,
+    category: a.category.trim(),
     imageUrl: a.imageData,
     externalUrl: a.externalUrl.trim(),
-    specs,
-    cardSpecKeys,
+    specs: Object.keys(specs).length ? specs : undefined,
+    cardSpecKeys: cardSpecKeys.length ? cardSpecKeys : undefined,
     displayPosition: a.displayPosition ?? undefined,
+    priority: a.priority,
+    source: a.source,
+    relevantRegions: a.relevantRegions,
+    relevantAccommodations: a.relevantAccommodations,
+    budgetTiers: a.budgetTiers,
+    tip: a.tip.trim() || undefined,
+    availabilityNote: a.availabilityNote.trim() || undefined,
+    indianCommunityNote: a.indianCommunityNote.trim() || undefined,
+    price,
   };
+  return item;
 }
 
 function readAsDataUrl(file: File): Promise<string> {
@@ -247,23 +317,8 @@ async function compositeOnWhiteToJpegBlob(cutout: Blob): Promise<Blob> {
   return jpegBlob;
 }
 
-async function uploadBlobToFirebase(blob: Blob, originalName: string): Promise<string> {
-  const stamp = Date.now();
-  const safeName = originalName.replace(/[^a-zA-Z0-9.\-_]/g, "_");
-  const path = `items/${stamp}-${safeName.replace(/\.(png|jpg|jpeg|webp)$/i, "")}.jpg`;
-  const fileRef = storageRef(storage, path);
-  await uploadBytes(fileRef, blob, { contentType: "image/jpeg" });
-  return getDownloadURL(fileRef);
-}
-
-/** Upload the original file bytes when the main pipeline fails completely */
-async function uploadOriginalImageFallback(file: File, itemId: string): Promise<string> {
-  const stamp = Date.now();
-  const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_") || "image";
-  const path = `items/${itemId}/original-${stamp}-${safeName}`;
-  const fileRef = storageRef(storage, path);
-  await uploadBytes(fileRef, file, { contentType: file.type || "application/octet-stream" });
-  return getDownloadURL(fileRef);
+async function dataUrlFromBlob(blob: Blob): Promise<string> {
+  return blobToDataUrl(blob);
 }
 
 /**
@@ -281,21 +336,15 @@ function runDeferredImagePipeline(
       requestAnimationFrame(() => setTimeout(resolve, 0));
     });
     try {
-      const { downloadUrl } = await processAndUploadImage(file);
-      updateItem(itemId, { imageUrl: downloadUrl });
+      const { dataUrl } = await processAndUploadImage(file);
+      updateItem(itemId, { imageUrl: dataUrl });
     } catch (e) {
       console.error("[admin-upload] deferred pipeline failed:", e);
       try {
-        const url = await uploadOriginalImageFallback(file, itemId);
+        const url = await readAsDataUrl(file);
         updateItem(itemId, { imageUrl: url });
       } catch (e2) {
-        console.error("[admin-upload] fallback upload failed, retrying:", e2);
-        try {
-          const url = await uploadOriginalImageFallback(file, `${itemId}-retry`);
-          updateItem(itemId, { imageUrl: url });
-        } catch (e3) {
-          console.error("[admin-upload] all image uploads failed:", e3);
-        }
+        console.error("[admin-upload] fallback data URL failed:", e2);
       }
     }
   })();
@@ -305,10 +354,9 @@ function runDeferredImagePipeline(
  * Upload pipeline used by the admin image input:
  * - Remove background
  * - Composite on white
- * - Upload processed JPEG to Firebase Storage
- * - Fallback to original file upload if removal fails
+ * - Store as local data URL (no cloud upload)
  */
-async function processAndUploadImage(file: File): Promise<{ downloadUrl: string; previewDataUrl: string }> {
+async function processAndUploadImage(file: File): Promise<{ dataUrl: string; previewDataUrl: string }> {
   const startedAt = performance.now();
   console.groupCollapsed("[admin-upload] start", {
     name: file.name,
@@ -353,6 +401,7 @@ async function processAndUploadImage(file: File): Promise<{ downloadUrl: string;
         workerErr,
       );
       console.info("[admin-upload] removeBackground() (main thread)…");
+      const { removeBackground } = await import("@imgly/background-removal");
       cutoutBlob = await removeBackground(preprocessed, removalOptions);
     }
     console.info("[admin-upload] background removed", {
@@ -367,31 +416,17 @@ async function processAndUploadImage(file: File): Promise<{ downloadUrl: string;
       type: processedBlob.type,
     });
 
-    console.info("[admin-upload] uploading to Firebase Storage...");
-    const downloadUrl = await uploadBlobToFirebase(processedBlob, file.name);
-    console.info("[admin-upload] upload complete", { downloadUrl });
-    const previewDataUrl = await blobToDataUrl(processedBlob);
-    console.info("[admin-upload] preview generated");
+    console.info("[admin-upload] encoding data URL (local)…");
+    const dataUrl = await dataUrlFromBlob(processedBlob);
+    const previewDataUrl = dataUrl;
     console.info("[admin-upload] success in ms", Math.round(performance.now() - startedAt));
     console.groupEnd();
-    return { downloadUrl, previewDataUrl };
+    return { dataUrl, previewDataUrl };
   } catch (err) {
-    // Never block admins: fallback to original upload
-    console.error("[admin-upload] background removal pipeline failed, fallback to original:", err);
-    console.info("[admin-upload] fallback upload to Firebase Storage (original file)");
-    const fallbackRef = storageRef(
-      storage,
-      `items/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_")}`
-    );
-    await uploadBytes(fallbackRef, file, { contentType: file.type || "application/octet-stream" });
-    const downloadUrl = await getDownloadURL(fallbackRef);
+    console.error("[admin-upload] background removal pipeline failed, fallback to original file:", err);
     const previewDataUrl = await readAsDataUrl(file);
-    console.warn("[admin-upload] fallback used", {
-      downloadUrl,
-      elapsedMs: Math.round(performance.now() - startedAt),
-    });
     console.groupEnd();
-    return { downloadUrl, previewDataUrl };
+    return { dataUrl: previewDataUrl, previewDataUrl };
   }
 }
 
@@ -399,10 +434,21 @@ function emptyAdminItem(): Omit<AdminItem, "id"> {
   return {
     name: "",
     brand: "",
-    category: "Furniture",
+    category: FILTER_CATEGORIES[0] ?? "Documents & Admin",
     externalUrl: "",
     imageData: "",
     displayPosition: null,
+    priority: "optional",
+    source: "either",
+    relevantRegions: [...ALL_REGIONS],
+    relevantAccommodations: [...ALL_ACCOMMODATIONS],
+    budgetTiers: [...ALL_BUDGET_TIERS],
+    tip: "",
+    availabilityNote: "",
+    indianCommunityNote: "",
+    priceInr: "",
+    priceLocal: "",
+    priceCurrency: "",
     specs: [{ id: uid(), label: "Dimensions", isCustom: false, value: "", showOnCard: false }],
   };
 }
@@ -464,7 +510,11 @@ function ImageUpload({
 
   const displaySrc =
     localPreview ||
-    (value && value !== PENDING_IMAGE_URL && value.startsWith("http") ? value : "");
+    (value &&
+    value !== PENDING_IMAGE_URL &&
+    (value.startsWith("http") || value.startsWith("data:") || value.startsWith("/"))
+      ? value
+      : "");
 
   const showPreview = Boolean(displaySrc);
 
@@ -487,7 +537,10 @@ function ImageUpload({
               revokePreview();
               setLocalPreview("");
               onPendingFile(null);
-              onChange(restoredUrl ?? "");
+              // If user is previewing a newly selected local file, revert to saved URL.
+              // If user is looking at the saved URL, clear it.
+              onChange(localPreview ? (restoredUrl ?? "") : "");
+              if (inputRef.current) inputRef.current.value = "";
             }}
             className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-neutral-200 hover:bg-neutral-50"
           >
@@ -511,7 +564,7 @@ function ImageUpload({
         </button>
       )}
       <p className="mt-1 text-[11px] text-neutral-400">
-        Background is removed and the image is uploaded after you save — you can close this form immediately.
+        Background is removed after you save; the image is stored locally in the browser — you can close this form immediately.
       </p>
     </div>
   );
@@ -775,14 +828,34 @@ function ItemDrawer({
   const validate = () => {
     const e: Record<string, string> = {};
     if (!form.name.trim()) e.name = "Name is required.";
-    if (!form.brand.trim()) e.brand = "Brand is required.";
-    if (!form.category) e.category = "Category is required.";
-    if (!form.externalUrl.trim()) e.externalUrl = "External URL is required.";
-    else if (!form.externalUrl.startsWith("http")) e.externalUrl = "URL must start with http.";
+    if (!form.category.trim()) e.category = "Category is required.";
+    if (!form.externalUrl.trim()) {
+      e.externalUrl = "Buy link is required.";
+    } else if (!/^https?:\/\//i.test(form.externalUrl.trim())) {
+      e.externalUrl = "URL must start with http:// or https://.";
+    }
     const hasImage =
       pendingImageFile != null ||
-      (typeof form.imageData === "string" && form.imageData.startsWith("http"));
+      (typeof form.imageData === "string" &&
+        (form.imageData.startsWith("http") ||
+          form.imageData.startsWith("data:") ||
+          form.imageData.startsWith("/")));
     if (!hasImage) e.imageData = "An image is required.";
+    if (form.relevantRegions.length === 0) {
+      e.regions = "Select at least one region.";
+    }
+    if (form.relevantAccommodations.length === 0) {
+      e.accommodations = "Select at least one accommodation type.";
+    }
+    if (form.budgetTiers.length === 0) {
+      e.budgets = "Select at least one budget tier.";
+    }
+    if (form.priceInr.trim() && !Number.isFinite(Number(form.priceInr))) {
+      e.priceInr = "Enter a valid number.";
+    }
+    if (form.priceLocal.trim() && !Number.isFinite(Number(form.priceLocal))) {
+      e.priceLocal = "Enter a valid number.";
+    }
 
     // Check each spec row: label must be set and value must be non-empty
     form.specs.forEach((s, i) => {
@@ -876,7 +949,7 @@ function ItemDrawer({
               {errors.name && <p className={errCls}>{errors.name}</p>}
             </div>
             <div>
-              <label className={labelCls}>Brand</label>
+              <label className={labelCls}>Brand (optional)</label>
               <input
                 type="text"
                 value={form.brand}
@@ -884,7 +957,6 @@ function ItemDrawer({
                 placeholder="Brand"
                 className={inputCls}
               />
-              {errors.brand && <p className={errCls}>{errors.brand}</p>}
             </div>
           </div>
 
@@ -893,15 +965,197 @@ function ItemDrawer({
             <label className={labelCls}>Category</label>
             <select
               value={form.category}
-              onChange={(e) => setForm((f) => ({ ...f, category: e.target.value as AdminItem["category"] }))}
+              onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
               className={inputCls}
             >
               <option value="">Select category…</option>
-              {CATEGORY_OPTIONS.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
+              {BROWSE_CATEGORY_CHIPS.map((chip) => {
+                const canonical = BROWSE_CHIP_TO_ITEM_CATEGORIES[chip][0];
+                return (
+                  <option key={chip} value={canonical}>
+                    {chip}
+                  </option>
+                );
+              })}
             </select>
             {errors.category && <p className={errCls}>{errors.category}</p>}
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <label className={labelCls}>Priority</label>
+              <select
+                value={form.priority}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, priority: e.target.value as Priority }))
+                }
+                className={inputCls}
+              >
+                <option value="day-1">Day 1</option>
+                <option value="week-1">First week</option>
+                <option value="month-1">First month</option>
+                <option value="optional">Optional</option>
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Source</label>
+              <select
+                value={form.source}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, source: e.target.value as Source }))
+                }
+                className={inputCls}
+              >
+                <option value="bring-from-india">Bring from India</option>
+                <option value="buy-there">Buy there</option>
+                <option value="either">Either</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className={labelCls}>Relevant regions</label>
+            <div className="mt-2 max-h-36 space-y-1.5 overflow-y-auto rounded-md border border-neutral-200 bg-neutral-50 p-2">
+              {ALL_REGIONS.map((r) => (
+                <label key={r} className="flex cursor-pointer items-center gap-2 text-xs text-neutral-700">
+                  <input
+                    type="checkbox"
+                    checked={form.relevantRegions.includes(r)}
+                    onChange={() =>
+                      setForm((f) => ({
+                        ...f,
+                        relevantRegions: f.relevantRegions.includes(r)
+                          ? f.relevantRegions.filter((x) => x !== r)
+                          : [...f.relevantRegions, r],
+                      }))
+                    }
+                    className="h-3.5 w-3.5 accent-neutral-900"
+                  />
+                  <span className="font-mono text-[10px] text-neutral-500">{r}</span>
+                </label>
+              ))}
+            </div>
+            {errors.regions && <p className={errCls}>{errors.regions}</p>}
+          </div>
+
+          <div>
+            <label className={labelCls}>Relevant accommodations</label>
+            <div className="mt-2 space-y-1.5 rounded-md border border-neutral-200 bg-neutral-50 p-2">
+              {ALL_ACCOMMODATIONS.map((r) => (
+                <label key={r} className="flex cursor-pointer items-center gap-2 text-xs text-neutral-700">
+                  <input
+                    type="checkbox"
+                    checked={form.relevantAccommodations.includes(r)}
+                    onChange={() =>
+                      setForm((f) => ({
+                        ...f,
+                        relevantAccommodations: f.relevantAccommodations.includes(r)
+                          ? f.relevantAccommodations.filter((x) => x !== r)
+                          : [...f.relevantAccommodations, r],
+                      }))
+                    }
+                    className="h-3.5 w-3.5 accent-neutral-900"
+                  />
+                  <span className="font-mono text-[10px] text-neutral-500">{r}</span>
+                </label>
+              ))}
+            </div>
+            {errors.accommodations && <p className={errCls}>{errors.accommodations}</p>}
+          </div>
+
+          <div>
+            <label className={labelCls}>Budget tiers</label>
+            <div className="mt-2 flex flex-wrap gap-3 rounded-md border border-neutral-200 bg-neutral-50 p-2">
+              {ALL_BUDGET_TIERS.map((r) => (
+                <label key={r} className="flex cursor-pointer items-center gap-2 text-xs text-neutral-700">
+                  <input
+                    type="checkbox"
+                    checked={form.budgetTiers.includes(r)}
+                    onChange={() =>
+                      setForm((f) => ({
+                        ...f,
+                        budgetTiers: f.budgetTiers.includes(r)
+                          ? f.budgetTiers.filter((x) => x !== r)
+                          : [...f.budgetTiers, r],
+                      }))
+                    }
+                    className="h-3.5 w-3.5 accent-neutral-900"
+                  />
+                  {r}
+                </label>
+              ))}
+            </div>
+            {errors.budgets && <p className={errCls}>{errors.budgets}</p>}
+          </div>
+
+          <div>
+            <label className={labelCls}>Tip</label>
+            <textarea
+              value={form.tip}
+              onChange={(e) => setForm((f) => ({ ...f, tip: e.target.value }))}
+              rows={3}
+              className={inputCls}
+              placeholder="Advice from a senior student…"
+            />
+          </div>
+
+          <div>
+            <label className={labelCls}>Availability note</label>
+            <textarea
+              value={form.availabilityNote}
+              onChange={(e) => setForm((f) => ({ ...f, availabilityNote: e.target.value }))}
+              rows={2}
+              className={inputCls}
+            />
+          </div>
+
+          <div>
+            <label className={labelCls}>Indian community note</label>
+            <textarea
+              value={form.indianCommunityNote}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, indianCommunityNote: e.target.value }))
+              }
+              rows={2}
+              className={inputCls}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div>
+              <label className={labelCls}>Price (INR)</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={form.priceInr}
+                onChange={(e) => setForm((f) => ({ ...f, priceInr: e.target.value }))}
+                placeholder="e.g. 1500"
+                className={inputCls}
+              />
+              {errors.priceInr && <p className={errCls}>{errors.priceInr}</p>}
+            </div>
+            <div>
+              <label className={labelCls}>Price (local)</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={form.priceLocal}
+                onChange={(e) => setForm((f) => ({ ...f, priceLocal: e.target.value }))}
+                placeholder="e.g. 45"
+                className={inputCls}
+              />
+              {errors.priceLocal && <p className={errCls}>{errors.priceLocal}</p>}
+            </div>
+            <div>
+              <label className={labelCls}>Local currency</label>
+              <input
+                type="text"
+                value={form.priceCurrency}
+                onChange={(e) => setForm((f) => ({ ...f, priceCurrency: e.target.value }))}
+                placeholder="USD, GBP…"
+                className={inputCls}
+              />
+            </div>
           </div>
 
           {/* External URL */}
@@ -911,7 +1165,7 @@ function ItemDrawer({
               type="text"
               value={form.externalUrl}
               onChange={(e) => setForm((f) => ({ ...f, externalUrl: e.target.value }))}
-              placeholder="https://..."
+              placeholder="https://… (optional)"
               className={inputCls}
             />
             {errors.externalUrl && <p className={errCls}>{errors.externalUrl}</p>}
@@ -923,7 +1177,11 @@ function ItemDrawer({
             <ImageUpload
               value={form.imageData}
               restoredUrl={
-                mode === "edit" && initial.imageData?.startsWith("http")
+                mode === "edit" &&
+                initial.imageData &&
+                (initial.imageData.startsWith("http") ||
+                  initial.imageData.startsWith("data:") ||
+                  initial.imageData.startsWith("/"))
                   ? initial.imageData
                   : undefined
               }
@@ -1060,7 +1318,7 @@ export default function ItemsPage() {
     return allItems.filter(
       (i) =>
         i.name.toLowerCase().includes(q) ||
-        i.brand.toLowerCase().includes(q),
+        (i.brand ?? "").toLowerCase().includes(q),
     );
   }, [allItems, search]);
 
@@ -1182,10 +1440,12 @@ export default function ItemsPage() {
                 <td className="px-4 py-2.5 text-xs font-medium text-neutral-800">{item.name}</td>
 
                 {/* Brand */}
-                <td className="px-4 py-2.5 text-xs text-neutral-500">{item.brand}</td>
+                <td className="px-4 py-2.5 text-xs text-neutral-500">{item.brand ?? "—"}</td>
 
                 {/* Category — desktop only */}
-                <td className="hidden px-4 py-2.5 text-xs text-neutral-500 lg:table-cell">{item.category}</td>
+                <td className="hidden px-4 py-2.5 text-xs text-neutral-500 lg:table-cell">
+                  {shortCategoryLabel(item.category)}
+                </td>
 
                 {/* Specs — desktop only */}
                 <td className="hidden px-4 py-2.5 text-xs text-neutral-400 lg:table-cell">{specSummary(item)}</td>
@@ -1241,9 +1501,9 @@ export default function ItemsPage() {
               {/* Info */}
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-neutral-900">{item.name}</p>
-                <p className="text-xs text-neutral-500">{item.brand}</p>
+                <p className="text-xs text-neutral-500">{item.brand ?? "—"}</p>
                 <span className="mt-1.5 inline-block rounded-full border border-neutral-200 px-2 py-0.5 text-[11px] text-neutral-500">
-                  {item.category}
+                  {shortCategoryLabel(item.category)}
                 </span>
               </div>
             </div>

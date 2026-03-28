@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { DM_Sans } from "next/font/google";
 import "./globals.css";
 import { DataProvider } from "@/context/DataContext";
-import { AccommodationProvider } from "@/context/AccommodationContext";
 import { SearchProvider } from "@/context/SearchContext";
 
 const dmSans = DM_Sans({
@@ -11,8 +10,8 @@ const dmSans = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "UrbanFlatKit",
-  description: "UrbanFlatKit",
+  title: "StudentKit",
+  description: "Everything you need. Nothing you don't.",
 };
 
 export default function RootLayout({
@@ -24,9 +23,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${dmSans.variable} font-sans antialiased`}>
         <DataProvider>
-          <SearchProvider>
-            <AccommodationProvider>{children}</AccommodationProvider>
-          </SearchProvider>
+          <SearchProvider>{children}</SearchProvider>
         </DataProvider>
       </body>
     </html>

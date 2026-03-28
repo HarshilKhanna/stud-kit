@@ -7,19 +7,20 @@ import { ArrowLeft } from "lucide-react";
 import { useAdminAuth } from "@/context/AdminAuthContext";
 
 export default function LoginPage() {
-  const { login, isAuthenticated } = useAdminAuth();
+  const { login, isAuthenticated, authReady } = useAdminAuth();
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!authReady) return;
     if (isAuthenticated) router.replace("/admin/dashboard");
-  }, [isAuthenticated, router]);
+  }, [authReady, isAuthenticated, router]);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const ok = login(username, password);
+    const ok = await login(username, password);
     if (!ok) {
       setError("Incorrect username or password.");
       setPassword("");
@@ -31,7 +32,7 @@ export default function LoginPage() {
       {/* Back link */}
       <div className="mb-6 w-full max-w-sm">
         <Link
-          href="/"
+          href="/browse"
           className="inline-flex items-center gap-1.5 text-xs text-neutral-400 transition-colors hover:text-neutral-600"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
@@ -41,7 +42,7 @@ export default function LoginPage() {
 
       <div className="w-full max-w-sm rounded-xl border border-neutral-200 bg-white px-8 py-9 shadow-sm">
         <div className="mb-6">
-          <p className="text-sm font-semibold tracking-tight text-neutral-900">UrbanFlatKit</p>
+          <p className="text-sm font-semibold tracking-tight text-neutral-900">StudentKit</p>
           <p className="mt-0.5 text-[11px] font-light text-neutral-400">Admin access</p>
         </div>
 

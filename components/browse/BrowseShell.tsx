@@ -4,28 +4,19 @@ import { useMemo, useState } from "react";
 import { useData } from "@/context/DataContext";
 import { Item } from "@/types";
 import { ItemGrid } from "./ItemGrid";
-import { FilterBar, Category } from "./FilterBar";
-import { SortOption } from "./SortBar";
+import { PrioritySections } from "./PrioritySections";
 import {
-  useAccommodation,
-  ACCOMMODATION_OPTIONS,
-  AccommodationType,
-} from "@/context/AccommodationContext";
-import { trackEvent } from "@/lib/analytics";
-
-function flattenItems(tower: ReturnType<typeof useData>["data"]): Item[] {
-  return tower.flats.flatMap((flat) =>
-    flat.rooms.flatMap((room) => room.items)
-  );
-}
-
-const CATEGORY_ORDER: Record<string, number> = {
-  furniture: 0,
-  lighting: 1,
-  decor: 2,
-  textiles: 3,
-  appliances: 4,
-};
+  FilterBar,
+  BrowseCategoryChip,
+  SourceFilter,
+  FILTER_CATEGORIES,
+  itemCategoryMatchesBrowseChips,
+} from "./FilterBar";
+import { SortOption } from "./SortBar";
+import { StudentProfileModal } from "@/components/profile/StudentProfileModal";
+const CATEGORY_ORDER: Record<string, number> = Object.fromEntries(
+  FILTER_CATEGORIES.map((c, i) => [c.toLowerCase(), i]),
+);
 
 function primaryDimension(item: Item): number {
   const dim = item.specs?.Dimensions;
@@ -35,22 +26,48 @@ function primaryDimension(item: Item): number {
   return Math.max(...nums.map(Number));
 }
 
-function featuredSort(items: Item[]): Item[] {
+function baseCategorySort(items: Item[]): Item[] {
   return [...items].sort((a, b) => {
-    const posA = a.displayPosition ?? null;
-    const posB = b.displayPosition ?? null;
-
-    // Pinned items always come first, sorted by position ascending
-    if (posA !== null && posB !== null) return posA - posB;
-    if (posA !== null) return -1;
-    if (posB !== null) return 1;
-
-    // Unpinned: sort by category then dimension descending
     const catA = CATEGORY_ORDER[a.category.toLowerCase()] ?? 99;
     const catB = CATEGORY_ORDER[b.category.toLowerCase()] ?? 99;
     if (catA !== catB) return catA - catB;
     return primaryDimension(b) - primaryDimension(a);
   });
+}
+
+function featuredSort(items: Item[]): Item[] {
+  const positioned: Item[] = [];
+  const unpositioned: Item[] = [];
+
+  for (const item of items) {
+    if (
+      typeof item.displayPosition === "number" &&
+      Number.isFinite(item.displayPosition) &&
+      item.displayPosition > 0
+    ) {
+      positioned.push(item);
+    } else {
+      unpositioned.push(item);
+    }
+  }
+
+  const ordered = baseCategorySort(unpositioned);
+  const sortedPositioned = [...positioned].sort((a, b) => {
+    const pa = a.displayPosition as number;
+    const pb = b.displayPosition as number;
+    if (pa !== pb) return pa - pb;
+    return a.id.localeCompare(b.id);
+  });
+
+  for (const item of sortedPositioned) {
+    const insertAt = Math.min(
+      Math.max((item.displayPosition as number) - 1, 0),
+      ordered.length,
+    );
+    ordered.splice(insertAt, 0, item);
+  }
+
+  return ordered;
 }
 
 function sortItems(items: Item[], sort: SortOption): Item[] {
@@ -60,7 +77,9 @@ function sortItems(items: Item[], sort: SortOption): Item[] {
     case "name-desc":
       return [...items].sort((a, b) => b.name.localeCompare(a.name));
     case "brand":
-      return [...items].sort((a, b) => a.brand.localeCompare(b.brand));
+      return [...items].sort((a, b) =>
+        (a.brand ?? "").localeCompare(b.brand ?? ""),
+      );
     case "category":
       return featuredSort(items);
     default:
@@ -68,133 +87,125 @@ function sortItems(items: Item[], sort: SortOption): Item[] {
   }
 }
 
-export function BrowseShell() {
-  const { data } = useData();
-  const {
-    promptNeeded,
-    showPrompt,
-    openPrompt,
-    select,
-    dismiss,
-    fitsAccommodation,
-  } = useAccommodation();
+function matchesSource(item: Item, sourceFilter: SourceFilter): boolean {
+  if (sourceFilter === "all") return true;
+  if (sourceFilter === "bring-from-india") {
+    return item.source === "bring-from-india";
+  }
+  if (sourceFilter === "buy-there") {
+    return item.source === "buy-there";
+  }
+  return true;
+}
 
-  const [activeCategories, setActiveCategories] = useState<Category[]>([]);
+function tieBreak(a: Item, b: Item, sort: SortOption): number {
+  switch (sort) {
+    case "name-asc":
+      return a.name.localeCompare(b.name);
+    case "name-desc":
+      return b.name.localeCompare(a.name);
+    case "brand":
+      return (a.brand ?? "").localeCompare(b.brand ?? "");
+    case "category":
+    default: {
+      const ca = CATEGORY_ORDER[a.category.toLowerCase()] ?? 99;
+      const cb = CATEGORY_ORDER[b.category.toLowerCase()] ?? 99;
+      if (ca !== cb) return ca - cb;
+      return primaryDimension(b) - primaryDimension(a);
+    }
+  }
+}
+
+export function BrowseShell({ projectId }: { projectId?: string }) {
+  const { filteredItems, studentProfile, openProfileModal } = useData();
+
+  const [activeBrowseChips, setActiveBrowseChips] = useState<BrowseCategoryChip[]>([]);
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   const [activeSort, setActiveSort] = useState<SortOption>("featured");
 
-  const allItems = useMemo(() => flattenItems(data), [data]);
+  const baseList = useMemo(() => {
+    let list = filteredItems;
+    if (projectId) {
+      list = list.filter((item) => item.projectId === projectId);
+    }
+    return list;
+  }, [filteredItems, projectId]);
 
   const visibleItems = useMemo(() => {
-    const filtered =
-      activeCategories.length === 0
-        ? allItems
-        : allItems.filter((item) =>
-            activeCategories.some(
-              (cat) => cat.toLowerCase() === item.category.toLowerCase(),
-            ),
-          );
+    let list = baseList;
 
-    const accommodationFiltered = filtered.filter(fitsAccommodation);
-    return sortItems(accommodationFiltered, activeSort);
-  }, [allItems, activeCategories, activeSort, fitsAccommodation]);
-
-  const animationKey = `${activeCategories.sort().join(",")}-${activeSort}`;
-
-  const handleItemClick = (item: Item) => {
-    const hasDimensions = Boolean(item.specs?.Dimensions);
-
-    if (hasDimensions && promptNeeded) {
-      openPrompt();
-      return;
+    if (activeBrowseChips.length > 0) {
+      list = list.filter((item) =>
+        itemCategoryMatchesBrowseChips(item.category, activeBrowseChips),
+      );
     }
 
-    if (item.externalUrl && typeof window !== "undefined") {
-      window.open(item.externalUrl, "_blank", "noopener,noreferrer");
+    list = list.filter((item) => matchesSource(item, sourceFilter));
+
+    const priorityOrder: Record<string, number> = {
+      "day-1": 0,
+      "week-1": 1,
+      "month-1": 2,
+      optional: 3,
+    };
+
+    if (studentProfile) {
+      return [...list].sort((a, b) => {
+        const pa = priorityOrder[a.priority] ?? 99;
+        const pb = priorityOrder[b.priority] ?? 99;
+        if (pa !== pb) return pa - pb;
+        return tieBreak(a, b, activeSort);
+      });
     }
-  };
+
+    return sortItems(list, activeSort);
+  }, [
+    baseList,
+    activeBrowseChips,
+    sourceFilter,
+    activeSort,
+    studentProfile,
+  ]);
+
+  const animationKey = `${activeBrowseChips.slice().sort().join(",")}-${activeSort}-${sourceFilter}-${Boolean(studentProfile)}`;
+
+  const showPriorityLayout = studentProfile != null;
 
   return (
     <>
+      <StudentProfileModal autoOpenWhenEmpty />
+
       <FilterBar
-        activeCategories={activeCategories}
-        onCategoriesChange={setActiveCategories}
+        activeBrowseChips={activeBrowseChips}
+        onBrowseChipsChange={setActiveBrowseChips}
+        sourceFilter={sourceFilter}
+        onSourceChange={setSourceFilter}
         sort={activeSort}
         onSortChange={setActiveSort}
       />
 
-      <section className="mx-auto max-w-[1400px] px-4 pt-4 pb-20">
-        <ItemGrid
-          items={visibleItems}
-          onItemClick={handleItemClick}
-          animationKey={animationKey}
-        />
-      </section>
-
-      {showPrompt && <AccommodationPrompt onSelect={select} onSkip={dismiss} />}
-    </>
-  );
-}
-
-/** Strip redundant words to keep card labels short */
-function shortLabel(opt: string): string {
-  return opt
-    .replace(/ apartment$/i, "")
-    .replace(/^Show all items$/i, "Show all");
-}
-
-function AccommodationPrompt({
-  onSelect,
-  onSkip,
-}: {
-  onSelect: (value: AccommodationType) => void;
-  onSkip: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:px-4">
-      <div
-        className="w-full max-w-full rounded-t-2xl bg-white px-5 pt-4 pb-6 shadow-xl sm:max-w-lg sm:rounded-2xl sm:px-6 sm:pt-6 sm:pb-6"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Drag handle — mobile only */}
-        <div className="mb-4 flex justify-center sm:hidden">
-          <div className="h-1 w-10 rounded-full bg-neutral-200" />
-        </div>
-
-        <h2 className="mb-1 text-sm font-semibold text-neutral-900">
-          What&rsquo;s your space like?
-        </h2>
-        <p className="mb-5 text-xs text-neutral-500">
-          We&rsquo;ll show you items that fit your space.
-        </p>
-
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {ACCOMMODATION_OPTIONS.map((opt) => (
+      <section className="mx-auto max-w-[1400px] px-4 pb-20 pt-4">
+        {studentProfile == null && (
+          <div className="mb-6 flex flex-col gap-3 rounded-xl border border-amber-200/80 bg-amber-50/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-amber-950/90">
+              Set your destination to get a personalised list and timeline.
+            </p>
             <button
-              key={opt}
               type="button"
-              onClick={() => {
-                try {
-                  trackEvent("accommodation_selected", { accommodationType: opt });
-                } catch {}
-                onSelect(opt);
-              }}
-              className="min-h-[52px] rounded-xl border border-neutral-200 bg-white px-3 py-3 text-left text-xs font-semibold text-neutral-700 transition-all hover:border-neutral-400 hover:bg-neutral-50 active:scale-[0.98]"
+              onClick={() => openProfileModal()}
+              className="flex-shrink-0 rounded-full bg-neutral-900 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-neutral-700"
             >
-              {shortLabel(opt)}
+              Set my profile
             </button>
-          ))}
-        </div>
+          </div>
+        )}
 
-        <div className="mt-5 flex justify-center">
-          <button
-            type="button"
-            onClick={onSkip}
-            className="text-xs text-neutral-400 underline-offset-2 transition-colors hover:text-neutral-600 hover:underline"
-          >
-            Skip for now
-          </button>
-        </div>
-      </div>
-    </div>
+        {showPriorityLayout ? (
+          <PrioritySections items={visibleItems} animationKey={animationKey} />
+        ) : (
+          <ItemGrid items={visibleItems} animationKey={animationKey} />
+        )}
+      </section>
+    </>
   );
 }

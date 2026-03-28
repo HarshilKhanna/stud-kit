@@ -27,6 +27,14 @@ const nextConfig = {
   },
 
   webpack(config, { isServer }) {
+    config.ignoreWarnings = [
+      ...(config.ignoreWarnings ?? []),
+      {
+        module: /onnxruntime-web[\\/]dist[\\/]ort\.min\.js/,
+        message: /Critical dependency: require function is used in a way/,
+      },
+    ];
+
     if (!isServer) {
       // ESM *.mjs bundles (ort.bundle / webgpu / wasm) contain `import.meta` and fail
       // Next’s production minifier ("from Terser"). The legacy UMD `ort.min.js` does not.
