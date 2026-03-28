@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #f5f5f3;   /* warm light grey page background */
+  --tile: #ffffff;         /* product card background */
+  --text-primary: #1a1a1a; /* main text */
+  --text-secondary: #6b6b6b; /* muted text */
+  --border: #e7e7e5;       /* subtle separators */
+  /* shadcn-style tokens for ui components */
+  --primary: #1a1a1a;
+  --primary-foreground: #ffffff;
+  --secondary: #e7e7e5;
+  --secondary-foreground: #1a1a1a;
+  --accent: #e7e7e5;
+  --accent-foreground: #1a1a1a;
+  --muted: #f0f0ee;
+  --muted-foreground: #6b6b6b;
+  --ring: #1a1a1a;
+  --input: #e7e7e5;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+}
+
+body {
+  background: var(--background);
+  color: var(--text-primary);
+  font-family: var(--font-dm-sans);
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
