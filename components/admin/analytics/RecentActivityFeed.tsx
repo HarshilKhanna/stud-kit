@@ -41,7 +41,7 @@ export function RecentActivityFeed({ events }: { events: AnalyticsEvent[] }) {
     .slice(0, 12);
 
   return (
-    <div className="flex flex-col border border-neutral-200 bg-white p-6 md:p-8 lg:h-[520px]">
+    <div className="flex h-[480px] flex-col border border-neutral-200 bg-white p-6 md:p-8">
       <h2 className="mb-5 flex-shrink-0 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">
         Recent Activity
       </h2>

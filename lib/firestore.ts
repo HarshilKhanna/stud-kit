@@ -17,6 +17,8 @@ import {
   deleteField,
   query,
   where,
+  orderBy,
+  limit,
   writeBatch,
   serverTimestamp,
   type UpdateData,
@@ -351,10 +353,24 @@ export async function setOnlyActiveProject(projectId: string): Promise<void> {
 // ─── Write ────────────────────────────────────────────────────────────────────
 
 /**
+ * Subscribe to the 12 most recently added items, ordered by createdAt desc.
+ */
+export function subscribeRecentItems(
+  onItems: (items: Item[]) => void,
+  onError?: (error: Error) => void
+): () => void {
+  return onSnapshot(
+    query(collection(db, COL), orderBy("createdAt", "desc"), limit(12)),
+    (snap) => onItems(mapUniqueItemsFromDocs(snap.docs)),
+    (err) => onError?.(err as Error)
+  );
+}
+
+/**
  * Add a new item. Uses item.id as the Firestore document ID so IDs are stable.
  */
 export async function addItem(item: Item): Promise<void> {
-  await setDoc(doc(db, COL, item.id), stripUndefined(item));
+  await setDoc(doc(db, COL, item.id), stripUndefined({ ...item, createdAt: serverTimestamp() }));
 }
 
 /**

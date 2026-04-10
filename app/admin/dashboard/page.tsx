@@ -1,9 +1,11 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { useData } from "@/context/DataContext";
-import { Item } from "@/types";
+import { seedFirestoreIfEmpty } from "@/lib/admin/seedFirestore";
+import { subscribeRecentItems } from "@/lib/firestore";
+import type { Item } from "@/types";
 import {
   BROWSE_CATEGORY_CHIPS,
   BROWSE_CHIP_TO_ITEM_CATEGORIES,
@@ -12,24 +14,44 @@ import {
 } from "@/components/browse/FilterBar";
 import { getItemImageDisplaySrc } from "@/lib/itemImageUrl";
 
-function flattenItems(data: ReturnType<typeof useData>["data"]): Item[] {
-  return data.flats.flatMap((flat) => flat.rooms.flatMap((room) => room.items));
-}
-
 export default function DashboardPage() {
-  const { data }  = useData();
-  const allItems  = useMemo(() => flattenItems(data), [data]);
+  const { items } = useData();
+  const [seeding, setSeeding] = useState(false);
+  const [seedMsg, setSeedMsg] = useState<string | null>(null);
+  const [recentItems, setRecentItems] = useState<Item[]>([]);
+
+  useEffect(() => {
+    const unsub = subscribeRecentItems(setRecentItems);
+    return unsub;
+  }, []);
+
+  async function handleSeed() {
+    setSeeding(true);
+    setSeedMsg(null);
+    try {
+      const count = await seedFirestoreIfEmpty();
+      setSeedMsg(
+        count > 0
+          ? `Seeded ${count} items to Firestore.`
+          : "Firestore already has data — nothing seeded.",
+      );
+    } catch (e) {
+      setSeedMsg("Seed failed. Check console.");
+      console.error(e);
+    } finally {
+      setSeeding(false);
+    }
+  }
 
   const stats = useMemo(() => {
     const counts = {} as Record<BrowseCategoryChip, number>;
     for (const chip of BROWSE_CATEGORY_CHIPS) {
       const fullCats = BROWSE_CHIP_TO_ITEM_CATEGORIES[chip];
-      counts[chip]   = allItems.filter((i) => fullCats.includes(i.category)).length;
+      counts[chip] = items.filter((i) => fullCats.includes(i.category)).length;
     }
-    return { total: allItems.length, counts };
-  }, [allItems]);
+    return { total: items.length, counts };
+  }, [items]);
 
-  const recentItems = useMemo(() => allItems.slice(0, 12), [allItems]);
 
   const today = new Date().toLocaleDateString("en-GB", {
     day: "2-digit", month: "short", year: "numeric",
@@ -57,6 +79,32 @@ export default function DashboardPage() {
           Manage Items
         </a>
       </header>
+
+      {/* Seed banner — only shown when Firestore is empty */}
+      {items.length === 0 && (
+        <div className="mb-6 flex items-center justify-between border border-neutral-200 bg-white px-6 py-4">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-600">
+              Firestore is empty
+            </p>
+            <p className="mt-0.5 text-[10px] text-neutral-400">
+              Seed the default catalogue to get started.
+            </p>
+          </div>
+          <div className="flex flex-col items-end gap-1">
+            <button
+              onClick={handleSeed}
+              disabled={seeding}
+              className="bg-black px-5 py-2.5 text-[10px] font-bold uppercase tracking-[0.2em] text-white transition-colors hover:bg-neutral-800 disabled:opacity-50"
+            >
+              {seeding ? "Seeding…" : "Seed Catalogue"}
+            </button>
+            {seedMsg && (
+              <p className="text-[10px] text-neutral-500">{seedMsg}</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Compact metrics strip */}
       <div className="mb-8 grid grid-cols-2 divide-x divide-y divide-neutral-100 border border-neutral-200 bg-white sm:grid-cols-3 lg:grid-cols-5 lg:divide-y-0">
@@ -91,7 +139,7 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Recent Acquisitions — table starts immediately */}
+      {/* Recent Acquisitions */}
       <section>
         <div className="mb-4 flex items-end justify-between">
           <h3
@@ -113,7 +161,7 @@ export default function DashboardPage() {
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-neutral-100 bg-neutral-50">
-                {["Item", "Classification", "Source", "Specs", ""].map((h) => (
+                {["Item", "Classification", "Source", ""].map((h) => (
                   <th
                     key={h}
                     className="py-3 pr-4 first:pl-4 text-[10px] font-bold uppercase tracking-[0.18em] text-neutral-500"
@@ -158,13 +206,10 @@ export default function DashboardPage() {
                     <td className="py-3 pr-4 text-[10px] font-semibold uppercase tracking-widest text-neutral-500">
                       {item.source === "bring-from-india" ? "India" : item.source === "buy-there" ? "Local" : "Either"}
                     </td>
-                    <td className="py-3 pr-4 text-xs text-neutral-500">
-                      {Object.keys(item.specs || {}).length} spec{Object.keys(item.specs || {}).length !== 1 ? "s" : ""}
-                    </td>
                     <td className="py-3 pr-4 text-right">
                       <a
                         href="/admin/items"
-                        className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 hover:text-black transition-colors"
+                        className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 transition-colors hover:text-black"
                       >
                         ↗
                       </a>

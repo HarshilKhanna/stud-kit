@@ -21,21 +21,6 @@ export function Navbar() {
         STUDENTKIT
       </Link>
 
-      {/* Nav links */}
-      <nav className="hidden items-center gap-8 md:flex">
-        <Link
-          href="/browse"
-          className="border-b border-black pb-0.5 text-[11px] font-bold uppercase tracking-[0.16em] text-black"
-        >
-          Catalog
-        </Link>
-        <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-500 cursor-default">
-          Guides
-        </span>
-        <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-500 cursor-default">
-          Checklist
-        </span>
-      </nav>
 
       {/* Right side */}
       <div className="flex items-center gap-4">

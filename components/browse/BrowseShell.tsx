@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useData } from "@/context/DataContext";
 import { Item } from "@/types";
 import { ItemGrid } from "./ItemGrid";
@@ -14,6 +14,7 @@ import {
 } from "./FilterBar";
 import { SortOption } from "./SortBar";
 import { StudentProfileModal } from "@/components/profile/StudentProfileModal";
+import { trackEvent } from "@/lib/analytics";
 
 const CATEGORY_ORDER: Record<string, number> = Object.fromEntries(
   FILTER_CATEGORIES.map((c, i) => [c.toLowerCase(), i]),
@@ -90,8 +91,39 @@ function tieBreak(a: Item, b: Item, sort: SortOption): number {
   }
 }
 
+// ── Scroll depth sentinel — fires once per depth milestone per page visit ──
+
+function useScrollDepth() {
+  const fired = useRef(new Set<string>());
+
+  useEffect(() => {
+    const MILESTONES = ["25%", "50%", "75%", "100%"] as const;
+    fired.current.clear();
+
+    function check() {
+      const el = document.documentElement;
+      const scrolled = el.scrollTop + el.clientHeight;
+      const total    = el.scrollHeight;
+      const pct      = total <= 0 ? 0 : (scrolled / total) * 100;
+
+      for (const m of MILESTONES) {
+        const threshold = parseInt(m, 10);
+        if (pct >= threshold && !fired.current.has(m)) {
+          fired.current.add(m);
+          trackEvent("scroll_depth", { depth: m });
+        }
+      }
+    }
+
+    window.addEventListener("scroll", check, { passive: true });
+    check(); // fire immediately in case page is short
+    return () => window.removeEventListener("scroll", check);
+  }, []);
+}
+
 export function BrowseShell({ projectId }: { projectId?: string }) {
   const { filteredItems, studentProfile, openProfileModal } = useData();
+  useScrollDepth();
 
   const [activeBrowseChips, setActiveBrowseChips] = useState<BrowseCategoryChip[]>([]);
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
@@ -160,9 +192,7 @@ export function BrowseShell({ projectId }: { projectId?: string }) {
       {studentProfile == null && (
         <div className="mx-auto max-w-none px-8 pt-6 md:px-16">
           <div className="flex flex-col gap-3 border border-neutral-200 bg-neutral-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <p
-              className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500"
-            >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500">
               Set your destination to get a personalised list and timeline.
             </p>
             <button

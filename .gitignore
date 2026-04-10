@@ -8,7 +8,6 @@
 
 # testing
 /coverage
-.firebase/ 
 
 # next.js
 /.next/
@@ -26,14 +25,29 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# local env files
+# local env files — never commit credentials
 .env
 .env.local
 .env*.local
 
-# Firebase secrets — service account key, never commit
+# Firebase
+.firebase/
+
+# Firebase service account keys — contain private keys, never commit
 secrets/
 !secrets/.gitkeep
+*firebase-adminsdk*.json
+student-kit-eee08-firebase-adminsdk-fbsvc-4e68f88cfe.json
+
+# App Hosting config contains env var values (API keys etc.)
+apphosting.yaml
+
+# Claude Code local settings
+.claude/
+public/.claude/
+
+# Misc build artifacts
+build_log.txt
 
 # vercel
 .vercel

@@ -8,11 +8,7 @@ import {
   FormEvent,
   ChangeEvent,
 } from "react";
-import { X, Plus, Trash2, Upload } from "lucide-react";
-import {
-  ensureBgRemovalWorker,
-  removeBackgroundInWorker,
-} from "@/lib/admin/bgRemovalWorkerClient";
+import { X, Plus, Upload } from "lucide-react";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { useData } from "@/context/DataContext";
 import { Item } from "@/types";
@@ -39,20 +35,10 @@ import {
   getItemImageDisplaySrc,
   isItemImagePipelinePending,
 } from "@/lib/itemImageUrl";
+import { uploadImage } from "@/lib/firestore";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const SPEC_LABEL_OPTIONS = [
-  "Dimensions",
-  "Material",
-  "Finish",
-  "Colour",
-  "Capacity",
-  "Power",
-  "Weight",
-  "Set includes",
-  "Custom",
-] as const;
 
 const CATEGORY_ORDER: Record<string, number> = Object.fromEntries(
   FILTER_CATEGORIES.map((c, i) => [c.toLowerCase(), i]),
@@ -60,13 +46,7 @@ const CATEGORY_ORDER: Record<string, number> = Object.fromEntries(
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type AdminSpecRow = {
-  id: string;
-  label: string;
-  isCustom: boolean;
-  value: string;
-  showOnCard: boolean;
-};
+
 
 type AdminItem = {
   id: string;
@@ -81,7 +61,6 @@ type AdminItem = {
   relevantRegions: Region[];
   relevantAccommodations: AccommodationType[];
   budgetTiers: BudgetTier[];
-  specs: AdminSpecRow[];
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -149,14 +128,6 @@ function flattenItems(data: ReturnType<typeof useData>["data"]): Item[] {
 }
 
 function toAdminItem(item: Item): AdminItem {
-  const cardKeys = new Set(item.cardSpecKeys || []);
-  const specs: AdminSpecRow[] = Object.entries(item.specs || {}).map(([label, value]) => ({
-    id: uid(),
-    label,
-    isCustom: !(SPEC_LABEL_OPTIONS as readonly string[]).includes(label) && label !== "Custom",
-    value,
-    showOnCard: cardKeys.has(label),
-  }));
   return {
     id: item.id,
     name: item.name,
@@ -170,20 +141,10 @@ function toAdminItem(item: Item): AdminItem {
     relevantRegions: [...item.relevantRegions],
     relevantAccommodations: [...item.relevantAccommodations],
     budgetTiers: [...item.budgetTiers],
-    specs,
   };
 }
 
 function fromAdminItem(a: AdminItem): Item {
-  const specs: Record<string, string> = {};
-  const cardSpecKeys: string[] = [];
-  for (const row of a.specs) {
-    const key = row.isCustom ? row.label : row.label;
-    if (key && row.value) {
-      specs[key] = row.value;
-      if (row.showOnCard) cardSpecKeys.push(key);
-    }
-  }
   const item: Item = {
     id: a.id,
     name: a.name.trim(),
@@ -191,8 +152,6 @@ function fromAdminItem(a: AdminItem): Item {
     category: a.category.trim(),
     imageUrl: a.imageData,
     externalUrl: a.externalUrl.trim(),
-    specs: Object.keys(specs).length ? specs : undefined,
-    cardSpecKeys: cardSpecKeys.length ? cardSpecKeys : undefined,
     displayPosition: a.displayPosition ?? undefined,
     priority: a.priority,
     source: a.source,
@@ -203,99 +162,11 @@ function fromAdminItem(a: AdminItem): Item {
   return item;
 }
 
-function readAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-function loadImageFromBlob(blob: Blob): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(blob);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve(img);
-    };
-    img.onerror = (err) => {
-      URL.revokeObjectURL(url);
-      reject(err);
-    };
-    img.src = url;
-  });
-}
-
-async function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-}
-
-async function downscaleForProcessing(file: File, maxEdge = 1000): Promise<Blob> {
-  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const el = new Image();
-    el.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve(el);
-    };
-    el.onerror = (err) => {
-      URL.revokeObjectURL(url);
-      reject(err);
-    };
-    el.src = url;
-  });
-
-  const scale = Math.min(1, maxEdge / Math.max(img.width, img.height));
-  const w = Math.max(1, Math.round(img.width * scale));
-  const h = Math.max(1, Math.round(img.height * scale));
-
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Could not initialize resize canvas");
-  ctx.drawImage(img, 0, 0, w, h);
-
-  const resized = await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob(resolve, "image/jpeg", 0.9)
-  );
-  if (!resized) throw new Error("Resize failed");
-  return resized;
-}
-
-async function compositeOnWhiteToJpegBlob(cutout: Blob): Promise<Blob> {
-  const img = await loadImageFromBlob(cutout);
-  const canvas = document.createElement("canvas");
-  canvas.width = img.width;
-  canvas.height = img.height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Could not initialize image canvas");
-
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(img, 0, 0);
-
-  const jpegBlob = await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob(resolve, "image/jpeg", 0.92)
-  );
-  if (!jpegBlob) throw new Error("Failed to export JPEG");
-  return jpegBlob;
-}
-
-async function dataUrlFromBlob(blob: Blob): Promise<string> {
-  return blobToDataUrl(blob);
-}
-
 /**
- * After the admin saves, runs removeBackground → Storage upload, then updateItem(imageUrl).
- * Never leaves imageUrl empty: falls back to uploading the original file if needed.
+ * Sends the image to the /api/remove-bg route (remove.bg API), uploads the
+ * result to Firebase Storage, then patches the item. Runs in the background
+ * so the UI stays responsive — the item is saved immediately with PENDING_IMAGE_URL
+ * and the real URL arrives when the pipeline finishes.
  */
 function runDeferredImagePipeline(
   itemId: string,
@@ -303,103 +174,28 @@ function runDeferredImagePipeline(
   updateItem: (id: string, patch: Partial<Item>) => void,
 ) {
   void (async () => {
-    // Let React paint (drawer close, pending thumbnail) before heavy work starts.
-    await new Promise<void>((resolve) => {
-      requestAnimationFrame(() => setTimeout(resolve, 0));
-    });
     try {
-      const { dataUrl } = await processAndUploadImage(file);
-      updateItem(itemId, { imageUrl: dataUrl });
+      const form = new FormData();
+      form.append("image", file);
+      const res = await fetch("/api/remove-bg", { method: "POST", body: form });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(error ?? "Background removal failed");
+      }
+      const processedBlob = await res.blob();
+      const processedFile = new File([processedBlob], `${itemId}.png`, { type: "image/png" });
+      const storageUrl = await uploadImage(processedFile, itemId);
+      updateItem(itemId, { imageUrl: storageUrl });
     } catch (e) {
-      console.error("[admin-upload] deferred pipeline failed:", e);
+      console.error("[admin-upload] remove.bg pipeline failed, uploading original:", e);
       try {
-        const url = await readAsDataUrl(file);
-        updateItem(itemId, { imageUrl: url });
-      } catch (e2) {
-        console.error("[admin-upload] fallback data URL failed:", e2);
+        const storageUrl = await uploadImage(file, itemId);
+        updateItem(itemId, { imageUrl: storageUrl });
+      } catch (uploadErr) {
+        console.error("[admin-upload] fallback upload also failed:", uploadErr);
       }
     }
   })();
-}
-
-/**
- * Upload pipeline used by the admin image input:
- * - Remove background
- * - Composite on white
- * - Store as local data URL (no cloud upload)
- */
-async function processAndUploadImage(file: File): Promise<{ dataUrl: string; previewDataUrl: string }> {
-  const startedAt = performance.now();
-  console.groupCollapsed("[admin-upload] start", {
-    name: file.name,
-    type: file.type,
-    sizeKB: Math.round(file.size / 1024),
-  });
-  try {
-    console.info("[admin-upload] preprocessing image...");
-    const preprocessed = await downscaleForProcessing(file, 1000);
-    console.info("[admin-upload] preprocessed", {
-      sizeKB: Math.round(preprocessed.size / 1024),
-    });
-
-    const publicPath =
-      typeof window !== "undefined"
-        ? `${window.location.origin}/api/bg-assets/`
-        : "/api/bg-assets/";
-
-    const removalOptions = {
-      publicPath,
-      debug: true,
-      progress: (key: string, current: number, total: number) => {
-        if (total > 0 && current % Math.max(1, Math.floor(total / 4)) === 0) {
-          console.info(`[admin-upload] ${key}: ${current}/${total}`);
-        }
-      },
-      model: "isnet_quint8" as const,
-      device: "cpu" as const,
-      output: {
-        format: "image/png" as const,
-        quality: 1,
-      },
-    };
-
-    let cutoutBlob: Blob;
-    try {
-      console.info("[admin-upload] removeBackground() (worker)…");
-      cutoutBlob = await removeBackgroundInWorker(preprocessed, publicPath);
-    } catch (workerErr) {
-      console.warn(
-        "[admin-upload] worker removal failed, main-thread fallback:",
-        workerErr,
-      );
-      console.info("[admin-upload] removeBackground() (main thread)…");
-      const { removeBackground } = await import("@imgly/background-removal");
-      cutoutBlob = await removeBackground(preprocessed, removalOptions);
-    }
-    console.info("[admin-upload] background removed", {
-      sizeKB: Math.round(cutoutBlob.size / 1024),
-      type: cutoutBlob.type,
-    });
-
-    console.info("[admin-upload] compositing on white...");
-    const processedBlob = await compositeOnWhiteToJpegBlob(cutoutBlob);
-    console.info("[admin-upload] composited jpeg", {
-      sizeKB: Math.round(processedBlob.size / 1024),
-      type: processedBlob.type,
-    });
-
-    console.info("[admin-upload] encoding data URL (local)…");
-    const dataUrl = await dataUrlFromBlob(processedBlob);
-    const previewDataUrl = dataUrl;
-    console.info("[admin-upload] success in ms", Math.round(performance.now() - startedAt));
-    console.groupEnd();
-    return { dataUrl, previewDataUrl };
-  } catch (err) {
-    console.error("[admin-upload] background removal pipeline failed, fallback to original file:", err);
-    const previewDataUrl = await readAsDataUrl(file);
-    console.groupEnd();
-    return { dataUrl: previewDataUrl, previewDataUrl };
-  }
 }
 
 function emptyAdminItem(): Omit<AdminItem, "id"> {
@@ -415,7 +211,6 @@ function emptyAdminItem(): Omit<AdminItem, "id"> {
     relevantRegions: [...ALL_REGIONS],
     relevantAccommodations: [...ALL_ACCOMMODATIONS],
     budgetTiers: [...ALL_BUDGET_TIERS],
-    specs: [{ id: uid(), label: "Dimensions", isCustom: false, value: "", showOnCard: false }],
   };
 }
 
@@ -534,210 +329,9 @@ function ImageUpload({
   );
 }
 
-const DIMENSION_UNITS = ["cm", "in", "mm", "m", "ft"] as const;
-
-/** Parse "220 × 90 × 90 cm" → { d: ["220","90","90"], unit: "cm" } */
-function parseDimValue(val: string): { parts: string[]; unit: string } {
-  const unitMatch = val.match(/([a-zA-Z]+)\s*$/);
-  const unit = unitMatch ? unitMatch[1] : "cm";
-  const nums = val.match(/[\d.⌀]+/g) ?? [];
-  return { parts: nums.slice(0, 3), unit };
-}
-
-/** Build dimension string from parts + unit, skipping blank parts */
-function buildDimValue(parts: string[], unit: string): string {
-  const filled = parts.filter((p) => p.trim() !== "");
-  if (filled.length === 0) return "";
-  return filled.join(" × ") + " " + unit;
-}
-
-function DimensionInput({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  const parsed = useMemo(() => parseDimValue(value), [value]);
-  const [parts, setParts] = useState<[string, string, string]>(() => {
-    const p = parsed.parts;
-    return [p[0] ?? "", p[1] ?? "", p[2] ?? ""];
-  });
-  const [unit, setUnit] = useState<string>(parsed.unit);
-  const [customUnit, setCustomUnit] = useState<string>(
-    DIMENSION_UNITS.includes(parsed.unit as (typeof DIMENSION_UNITS)[number]) ? "" : parsed.unit
-  );
-  const isCustomUnit = !DIMENSION_UNITS.includes(unit as (typeof DIMENSION_UNITS)[number]);
-
-  const emit = (nextParts: [string, string, string], nextUnit: string) => {
-    onChange(buildDimValue(nextParts, nextUnit));
-  };
-
-  const updatePart = (idx: 0 | 1 | 2, v: string) => {
-    const next: [string, string, string] = [...parts] as [string, string, string];
-    next[idx] = v;
-    setParts(next);
-    emit(next, unit);
-  };
-
-  const updateUnit = (v: string) => {
-    if (v === "__custom__") {
-      setUnit("__custom__");
-      return;
-    }
-    setUnit(v);
-    setCustomUnit("");
-    emit(parts, v);
-  };
-
-  const updateCustomUnit = (v: string) => {
-    setCustomUnit(v);
-    setUnit(v);
-    emit(parts, v || "cm");
-  };
-
-  const dimInputCls = "w-full border-0 border-b border-neutral-200 bg-transparent px-0 py-1.5 text-xs text-neutral-900 outline-none focus:border-black focus:ring-0 text-center";
-
-  return (
-    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-      <div className="flex items-center gap-2">
-        <input type="text" value={parts[0]} onChange={(e) => updatePart(0, e.target.value)} placeholder="—" className={dimInputCls} />
-        <span className="flex-shrink-0 text-[11px] text-neutral-400">×</span>
-        <input type="text" value={parts[1]} onChange={(e) => updatePart(1, e.target.value)} placeholder="—" className={dimInputCls} />
-        <span className="flex-shrink-0 text-[11px] text-neutral-400">×</span>
-        <input type="text" value={parts[2]} onChange={(e) => updatePart(2, e.target.value)} placeholder="—" className={dimInputCls} />
-        {isCustomUnit ? (
-          <input
-            type="text"
-            value={customUnit}
-            onChange={(e) => updateCustomUnit(e.target.value)}
-            placeholder="unit"
-            className="w-14 flex-shrink-0 border-0 border-b border-neutral-200 bg-transparent px-0 py-1.5 text-xs text-neutral-900 outline-none focus:border-black focus:ring-0"
-          />
-        ) : (
-          <select
-            value={unit}
-            onChange={(e) => updateUnit(e.target.value)}
-            className="w-16 flex-shrink-0 border-0 border-b border-neutral-200 bg-transparent px-0 py-1.5 text-xs text-neutral-900 outline-none focus:border-black focus:ring-0"
-          >
-            {DIMENSION_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
-            <option value="__custom__">Other…</option>
-          </select>
-        )}
-      </div>
-      <p className="text-[10px] text-neutral-400">Leave blank fields for 1D or 2D dimensions</p>
-    </div>
-  );
-}
-
-function SpecRow({
-  row,
-  onUpdate,
-  onRemove,
-  onCardToggle,
-  cardLimitReached,
-}: {
-  row: AdminSpecRow;
-  onUpdate: (patch: Partial<AdminSpecRow>) => void;
-  onRemove: () => void;
-  onCardToggle: () => void;
-  cardLimitReached: boolean;
-}) {
-  const handleLabelChange = (val: string) => {
-    if (val === "Custom") {
-      onUpdate({ label: "", isCustom: true });
-    } else {
-      onUpdate({ label: val, isCustom: false });
-    }
-  };
-
-  const isDimensions = !row.isCustom && row.label === "Dimensions";
-
-  const labelEl = row.isCustom ? (
-    <input
-      type="text"
-      value={row.label}
-      onChange={(e) => onUpdate({ label: e.target.value })}
-      placeholder="Custom label"
-      className="w-full border-0 border-b border-neutral-200 bg-transparent px-0 py-1.5 text-xs text-neutral-900 outline-none focus:border-black focus:ring-0"
-    />
-  ) : (
-    <select
-      value={row.label}
-      onChange={(e) => handleLabelChange(e.target.value)}
-      className="w-full border-0 border-b border-neutral-200 bg-transparent px-0 py-1.5 text-xs text-neutral-900 outline-none focus:border-black focus:ring-0"
-    >
-      <option value="">Label</option>
-      {SPEC_LABEL_OPTIONS.filter((o) => o !== "Custom").map((o) => (
-        <option key={o} value={o}>{o}</option>
-      ))}
-      <option value="Custom">Custom…</option>
-    </select>
-  );
-
-  const valueEl = isDimensions ? (
-    <DimensionInput value={row.value} onChange={(v) => onUpdate({ value: v })} />
-  ) : (
-    <input
-      type="text"
-      value={row.value}
-      onChange={(e) => onUpdate({ value: e.target.value })}
-      placeholder="Value"
-      className="w-full border-0 border-b border-neutral-200 bg-transparent px-0 py-1.5 text-xs text-neutral-900 outline-none focus:border-black focus:ring-0"
-    />
-  );
-
-  const cardToggleEl = (
-    <label className="flex min-h-[44px] flex-shrink-0 cursor-pointer items-center gap-1.5 md:min-h-0 md:pt-1.5">
-      <input
-        type="checkbox"
-        checked={row.showOnCard}
-        onChange={onCardToggle}
-        disabled={!row.showOnCard && cardLimitReached}
-        className="h-3.5 w-3.5 cursor-pointer accent-neutral-900 disabled:cursor-not-allowed disabled:opacity-40"
-      />
-      <span className="text-[11px] text-neutral-500">Card</span>
-    </label>
-  );
-
-  const deleteEl = (
-    <button
-      type="button"
-      onClick={onRemove}
-      className="flex h-11 w-11 flex-shrink-0 items-center justify-center text-neutral-300 transition-colors hover:text-red-400 md:h-auto md:w-auto md:pt-1.5"
-    >
-      <Trash2 className="h-3.5 w-3.5" />
-    </button>
-  );
-
-  return (
-    <>
-      {/* Mobile: two-row layout */}
-      <div className="border-b border-neutral-100 pb-3 md:hidden">
-        <div className="flex items-center gap-2">
-          <div className="min-w-0 flex-1">{labelEl}</div>
-          {deleteEl}
-        </div>
-        <div className="mt-1.5 flex items-center gap-2">
-          <div className="min-w-0 flex-1">{valueEl}</div>
-          {cardToggleEl}
-        </div>
-      </div>
-
-      {/* Desktop: single-row layout */}
-      <div className="hidden md:flex md:items-start md:gap-2">
-        <div className="w-36 flex-shrink-0">{labelEl}</div>
-        <div className="min-w-0 flex-1">{valueEl}</div>
-        {cardToggleEl}
-        {deleteEl}
-      </div>
-    </>
-  );
-}
-
-// ─── Drawer ───────────────────────────────────────────────────────────────────
 
 function ItemDrawer({
+
   open,
   mode,
   initial,
@@ -754,47 +348,9 @@ function ItemDrawer({
   onSave: (item: AdminItem, pendingImageFile: File | null) => void;
 }) {
   const [form, setForm] = useState<Omit<AdminItem, "id"> & { id?: string }>(initial);
-  const [cardLimitMsg, setCardLimitMsg] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
-
-  const cardCount = form.specs.filter((s) => s.showOnCard).length;
-
-  const imageUrlFieldValue = useMemo(() => {
-    const d = form.imageData;
-    if (!d || d === PENDING_IMAGE_URL) return "";
-    if (d.startsWith("http") || d.startsWith("/")) return d;
-    return "";
-  }, [form.imageData]);
-
-  const updateSpec = (id: string, patch: Partial<AdminSpecRow>) => {
-    setForm((f) => ({
-      ...f,
-      specs: f.specs.map((s) => (s.id === id ? { ...s, ...patch } : s)),
-    }));
-  };
-
-  const removeSpec = (id: string) => {
-    setForm((f) => ({ ...f, specs: f.specs.filter((s) => s.id !== id) }));
-  };
-
-  const toggleCard = (id: string) => {
-    const row = form.specs.find((s) => s.id === id);
-    if (!row) return;
-    if (!row.showOnCard && cardCount >= 2) {
-      setCardLimitMsg(true);
-      setTimeout(() => setCardLimitMsg(false), 3000);
-      return;
-    }
-    updateSpec(id, { showOnCard: !row.showOnCard });
-  };
-
-  const addSpec = () => {
-    setForm((f) => ({
-      ...f,
-      specs: [...f.specs, { id: uid(), label: "Dimensions", isCustom: false, value: "", showOnCard: false }],
-    }));
-  };
+  const formScrollRef = useRef<HTMLFormElement>(null);
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -821,12 +377,6 @@ function ItemDrawer({
     if (form.budgetTiers.length === 0) {
       e.budgets = "Select at least one budget tier.";
     }
-    // Check each spec row: label must be set and value must be non-empty
-    form.specs.forEach((s, i) => {
-      const lbl = s.isCustom ? s.label.trim() : s.label;
-      if (!lbl) e[`spec_label_${i}`] = `Spec ${i + 1}: label is required.`;
-      if (lbl && !s.value.trim()) e[`spec_value_${i}`] = `Spec ${i + 1} (${lbl}): value cannot be empty.`;
-    });
 
     // Position uniqueness
     if (form.displayPosition !== null) {
@@ -836,7 +386,22 @@ function ItemDrawer({
     }
 
     setErrors(e);
-    return Object.keys(e).length === 0;
+    const isValid = Object.keys(e).length === 0;
+    
+    if (!isValid) {
+      setTimeout(() => {
+        const container = formScrollRef.current;
+        if (!container) return;
+        const firstErrorEl = container.querySelector<HTMLElement>(".form-error");
+        if (firstErrorEl) {
+          const containerTop = container.getBoundingClientRect().top;
+          const errorTop = firstErrorEl.getBoundingClientRect().top;
+          container.scrollBy({ top: errorTop - containerTop - 80, behavior: "smooth" });
+        }
+      }, 50);
+    }
+    
+    return isValid;
   };
 
   const handleSubmit = (e: FormEvent) => {
@@ -849,7 +414,7 @@ function ItemDrawer({
   };
 
   const inputCls = "w-full bg-transparent border-0 border-b border-neutral-200 focus:border-black focus:ring-0 px-0 py-2 text-sm text-neutral-900 outline-none transition-colors";
-  const errCls = "mt-1 text-[11px] text-neutral-500";
+  const errCls = "mt-1 text-[11px] text-red-500 form-error";
   const labelCls = "block text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 mb-2";
 
   return (
@@ -895,6 +460,7 @@ function ItemDrawer({
         {/* Scrollable body */}
         <form
           id="item-form"
+          ref={formScrollRef}
           onSubmit={handleSubmit}
           className="flex-1 overflow-y-auto px-6 py-6 space-y-8 md:px-10 md:py-8"
         >
@@ -1083,30 +649,20 @@ function ItemDrawer({
 
           {/* External URL */}
           <div>
-            <label className={labelCls}>External URL</label>
+            <label className={labelCls}>External URL <span className="text-red-400">*</span></label>
             <input
               type="text"
               value={form.externalUrl}
               onChange={(e) => setForm((f) => ({ ...f, externalUrl: e.target.value }))}
-              placeholder="https://… (optional)"
+              placeholder="https://…"
               className={inputCls}
             />
             {errors.externalUrl && <p className={errCls}>{errors.externalUrl}</p>}
           </div>
 
-          {/* Image URL or file — at least one required (validated below) */}
+          {/* Image file — at least one required (validated below) */}
           <div>
             <label className={labelCls}>Image <span className="text-red-400">*</span></label>
-            <input
-              type="url"
-              value={imageUrlFieldValue}
-              onChange={(e) => {
-                setPendingImageFile(null);
-                setForm((f) => ({ ...f, imageData: e.target.value.trim() }));
-              }}
-              placeholder="https://… or /image.webp — optional if you upload"
-              className={inputCls + " mb-2"}
-            />
             <ImageUpload
               value={form.imageData}
               restoredUrl={
@@ -1144,43 +700,6 @@ function ItemDrawer({
               Blank = ordered by category priority. Enter a number to pin this item to a specific position in the grid.
             </p>
             {errors.displayPosition && <p className={errCls}>{errors.displayPosition}</p>}
-          </div>
-
-          {/* Specs */}
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <label className={labelCls + " mb-0"}>Specs</label>
-              {cardLimitMsg && (
-                <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-neutral-400">Max 2 specs on card.</p>
-              )}
-            </div>
-            <div className="space-y-2">
-              {form.specs.map((row, i) => (
-                <div key={row.id}>
-                  <SpecRow
-                    row={row}
-                    onUpdate={(patch) => updateSpec(row.id, patch)}
-                    onRemove={() => removeSpec(row.id)}
-                    onCardToggle={() => toggleCard(row.id)}
-                    cardLimitReached={cardCount >= 2 && !row.showOnCard}
-                  />
-                  {errors[`spec_label_${i}`] && (
-                    <p className={errCls + " mt-0.5"}>{errors[`spec_label_${i}`]}</p>
-                  )}
-                  {errors[`spec_value_${i}`] && (
-                    <p className={errCls + " mt-0.5"}>{errors[`spec_value_${i}`]}</p>
-                  )}
-                </div>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={addSpec}
-              className="mt-3 flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-800"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Add spec
-            </button>
           </div>
 
         </form>
@@ -1236,15 +755,6 @@ export default function ItemsPage() {
     return () => cancelAnimationFrame(id);
   }, [deleteTarget]);
 
-  useEffect(() => {
-    const publicPath = `${window.location.origin}/api/bg-assets/`;
-    ensureBgRemovalWorker(publicPath).catch((e) =>
-      console.warn(
-        "[admin-upload] worker preload failed (upload will use main-thread fallback)",
-        e,
-      ),
-    );
-  }, []);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -1345,7 +855,6 @@ export default function ItemsPage() {
               <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Name</th>
               <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Brand</th>
               <th className="hidden px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 lg:table-cell">Category</th>
-              <th className="hidden px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 lg:table-cell">Specs</th>
               <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Actions</th>
             </tr>
           </thead>
@@ -1402,11 +911,6 @@ export default function ItemsPage() {
                   <span className="border border-neutral-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-neutral-500">
                     {shortCategoryLabel(item.category)}
                   </span>
-                </td>
-
-                {/* Specs — desktop only */}
-                <td className="hidden px-4 py-3 text-xs text-neutral-400 lg:table-cell">
-                  {Object.values(item.specs || {}).slice(0, 2).join(", ") || "—"}
                 </td>
 
                 {/* Actions */}

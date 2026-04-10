@@ -1,4 +1,14 @@
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import {
+  collection,
+  addDoc,
+  getDocs,
+  onSnapshot,
+  query,
+  orderBy,
+  limit,
+  serverTimestamp,
+  type QuerySnapshot,
+} from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 /**
@@ -15,6 +25,13 @@ export interface AnalyticsEvent {
 }
 
 const COL = "analytics";
+
+function mapSnap(snap: QuerySnapshot): AnalyticsEvent[] {
+  return snap.docs.map((d) => ({
+    id: d.id,
+    ...(d.data() as Omit<AnalyticsEvent, "id">),
+  }));
+}
 
 /**
  * Fire-and-forget analytics write. Never throws or blocks the UI.
@@ -33,20 +50,26 @@ export function trackEvent(
 }
 
 /**
- * Fetch all analytics events for the admin panel.
- * Returns documents sorted newest-first.
+ * Fetch all analytics events for the admin panel (one-shot).
  */
 export async function getAllEvents(): Promise<AnalyticsEvent[]> {
-  const { getDocs, query, orderBy, limit } = await import("firebase/firestore");
   const snap = await getDocs(
-    query(
-      collection(db, COL),
-      orderBy("timestamp", "desc"),
-      limit(MAX_EVENTS_FOR_DASHBOARD),
-    ),
+    query(collection(db, COL), orderBy("timestamp", "desc"), limit(MAX_EVENTS_FOR_DASHBOARD))
   );
-  return snap.docs.map((d) => ({
-    id: d.id,
-    ...(d.data() as Omit<AnalyticsEvent, "id">),
-  }));
+  return mapSnap(snap);
+}
+
+/**
+ * Real-time subscription to analytics events, newest-first.
+ * Returns an unsubscribe function.
+ */
+export function subscribeAllEvents(
+  onEvents: (events: AnalyticsEvent[]) => void,
+  onError?: (err: Error) => void,
+): () => void {
+  return onSnapshot(
+    query(collection(db, COL), orderBy("timestamp", "desc"), limit(MAX_EVENTS_FOR_DASHBOARD)),
+    (snap) => onEvents(mapSnap(snap)),
+    (err) => onError?.(err as Error),
+  );
 }

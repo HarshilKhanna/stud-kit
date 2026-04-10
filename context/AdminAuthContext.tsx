@@ -8,7 +8,6 @@ import {
   useEffect,
   ReactNode,
 } from "react";
-import { getProjects } from "@/lib/firestore";
 
 const ADMIN_USERNAME = "admin";
 const ADMIN_PASSWORD = "admin1234";
@@ -36,43 +35,18 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (username: string, password: string): Promise<boolean> => {
-    try {
-      const projects = await getProjects();
-      const matchedProject = projects.find(
-        (p) => p.adminUsername === username && p.adminPassword === password,
-      );
-      if (matchedProject) {
-        if (typeof window !== "undefined") {
-          window.sessionStorage.setItem("admin_active_project_id", matchedProject.id);
-          window.sessionStorage.setItem(ADMIN_AUTH_KEY, "true");
-        }
-        setIsAuthenticated(true);
-        return true;
+    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem(ADMIN_AUTH_KEY, "true");
       }
-
-      if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-        const preferredProject = projects.find((p) => p.isActive) ?? projects[0] ?? null;
-        if (typeof window !== "undefined") {
-          if (preferredProject) {
-            window.sessionStorage.setItem("admin_active_project_id", preferredProject.id);
-          } else {
-            window.sessionStorage.removeItem("admin_active_project_id");
-          }
-          window.sessionStorage.setItem(ADMIN_AUTH_KEY, "true");
-        }
-        setIsAuthenticated(true);
-        return true;
-      }
-    } catch (err) {
-      console.error("Admin login failed:", err);
-      return false;
+      setIsAuthenticated(true);
+      return true;
     }
     return false;
   }, []);
 
   const logout = useCallback(() => {
     if (typeof window !== "undefined") {
-      window.sessionStorage.removeItem("admin_active_project_id");
       window.sessionStorage.removeItem(ADMIN_AUTH_KEY);
       window.localStorage.removeItem(ADMIN_AUTH_KEY);
     }

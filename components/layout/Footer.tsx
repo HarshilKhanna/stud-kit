@@ -12,7 +12,7 @@ export function Footer() {
           STUDENTKIT
         </div>
         <div className="text-[10px] uppercase tracking-[0.18em] text-neutral-400">
-          © 2024 STUDENTKIT. THE ACADEMIC MONOGRAPH.
+          © 2026 STUDENTKIT. THE ACADEMIC MONOGRAPH.
         </div>
       </div>
       <div className="flex gap-10">

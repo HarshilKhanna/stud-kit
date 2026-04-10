@@ -6,9 +6,9 @@ import { LayoutGrid, Package, BarChart2, ArrowLeft, LogOut, X } from "lucide-rea
 import { useAdminAuth } from "@/context/AdminAuthContext";
 
 const NAV = [
-  { href: "/admin/dashboard", label: "Dashboard", icon: LayoutGrid },
-  { href: "/admin/items",     label: "Items",     icon: Package    },
-  { href: "/admin/analytics", label: "Analytics", icon: BarChart2  },
+  { href: "/admin/dashboard",       label: "Dashboard",   icon: LayoutGrid },
+  { href: "/admin/items",           label: "Items",       icon: Package    },
+  { href: "/admin/analytics",       label: "Analytics",   icon: BarChart2  },
 ];
 
 interface AdminSidebarProps {

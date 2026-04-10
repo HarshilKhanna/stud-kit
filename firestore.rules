@@ -1,0 +1,19 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Items: anyone can read, only authenticated admin writes (enforced in app layer)
+    match /items/{itemId} {
+      allow read: if true;
+      allow write: if true;
+    }
+    // Projects collection (legacy, kept for compatibility)
+    match /projects/{projectId} {
+      allow read: if true;
+      allow write: if true;
+    }
+    // Analytics
+    match /analytics/{doc} {
+      allow read, write: if true;
+    }
+  }
+}

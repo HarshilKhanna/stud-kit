@@ -109,16 +109,10 @@ export default function LoginPage() {
 
             {/* Password */}
             <div>
-              <div className="mb-2 flex items-baseline justify-between">
+              <div className="mb-2">
                 <label className="text-[10px] font-semibold uppercase tracking-[0.18em] text-neutral-400">
                   Password
                 </label>
-                <button
-                  type="button"
-                  className="text-[10px] font-semibold uppercase tracking-[0.18em] text-neutral-400 transition-colors hover:text-black"
-                >
-                  Forgot?
-                </button>
               </div>
               <input
                 type="password"
@@ -155,23 +149,13 @@ export default function LoginPage() {
             </motion.button>
           </form>
 
-          {/* Footer text */}
-          <p className="mt-8 text-center text-sm text-neutral-400">
-            New to the curriculum?{" "}
-            <a
-              href="#"
-              className="font-semibold text-black underline-offset-2 hover:underline"
-            >
-              Create an account
-            </a>
-          </p>
         </motion.div>
       </main>
 
       {/* ── Bottom footer ── */}
       <footer className="relative z-10 flex w-full flex-col items-start justify-between gap-4 border-t border-neutral-200/60 px-10 py-6 md:flex-row md:items-center md:px-20 lg:px-32">
         <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-neutral-400">
-          © 2024 The Academic Monograph
+          © 2026 The Academic Monograph
         </span>
         <div className="flex gap-8">
           {["Privacy", "Terms", "Archive", "Contact"].map((l) => (

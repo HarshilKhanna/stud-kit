@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//e/aiblocks/student-kit/data/**)",
+      "Read(//e/aiblocks/student-kit/lib/**)",
+      "Read(//e/aiblocks/student-kit/scripts/**)",
+      "Read(//e/aiblocks/student-kit/types/**)",
+      "Read(//e/aiblocks/student-kit/context/**)",
+      "Read(//e/aiblocks/student-kit/app/**)",
+      "Read(//e/aiblocks/student-kit/app/admin/**)",
+      "Bash(npm run:*)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('project_id:', d.get\\('project_id'\\)\\); print\\('client_email:', d.get\\('client_email'\\)\\)\")"
+    ]
+  }
+}

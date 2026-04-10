@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import type { Item } from "@/types";
 import {
@@ -9,6 +9,7 @@ import {
   isItemImagePipelinePending,
 } from "@/lib/itemImageUrl";
 import { getItemBuyUrl } from "@/lib/itemBuyUrl";
+import { trackEvent } from "@/lib/analytics";
 
 const PRIORITY_BADGE: Record<string, string | null> = {
   "day-1":   "Day 1",
@@ -24,15 +25,30 @@ const SOURCE_LABEL: Record<string, string> = {
 
 export function ItemCard({ item }: { item: Item }) {
   const [imageFailed, setImageFailed] = useState(false);
-  const buyUrl        = getItemBuyUrl(item);
-  const imgSrc        = getItemImageDisplaySrc(item);
+  const buyUrl          = getItemBuyUrl(item);
+  const imgSrc          = getItemImageDisplaySrc(item);
   const pipelinePending = isItemImagePipelinePending(item);
-  const badge         = PRIORITY_BADGE[item.priority] ?? null;
-  const sourceLabel   = SOURCE_LABEL[item.source] ?? "Either";
+  const badge           = PRIORITY_BADGE[item.priority] ?? null;
+  const sourceLabel     = SOURCE_LABEL[item.source] ?? "Either";
+  const hoverFired      = useRef(false);
 
   useEffect(() => {
     setImageFailed(false);
   }, [imgSrc]);
+
+  function handleClick() {
+    trackEvent("item_clicked", {
+      itemId:   item.id,
+      itemName: item.name,
+      category: item.category,
+    });
+  }
+
+  function handleMouseEnter() {
+    if (hoverFired.current) return;
+    hoverFired.current = true;
+    trackEvent("item_hovered", { itemId: item.id, itemName: item.name });
+  }
 
   return (
     <motion.a
@@ -42,6 +58,8 @@ export function ItemCard({ item }: { item: Item }) {
       whileTap={{ scale: 0.98 }}
       transition={{ duration: 0.15, ease: "easeOut" }}
       className="group flex w-full flex-col no-underline outline-none focus-visible:ring-2 focus-visible:ring-neutral-400"
+      onClick={handleClick}
+      onMouseEnter={handleMouseEnter}
     >
       {/* Image */}
       <div className="relative aspect-square w-full overflow-hidden bg-[#F9F9F9]">
@@ -76,7 +94,6 @@ export function ItemCard({ item }: { item: Item }) {
           </div>
         )}
 
-        {/* Priority badge — top-left of image */}
         {badge && (
           <span className="absolute left-0 top-0 bg-black px-2 py-1 text-[8px] font-bold uppercase tracking-[0.18em] text-white">
             {badge}
@@ -86,7 +103,6 @@ export function ItemCard({ item }: { item: Item }) {
 
       {/* Text area */}
       <div className="pt-3">
-        {/* Name + arrow */}
         <div className="flex items-start justify-between gap-1.5">
           <p
             className="line-clamp-2 flex-1 text-[15px] leading-snug text-black"
@@ -99,7 +115,6 @@ export function ItemCard({ item }: { item: Item }) {
           </span>
         </div>
 
-        {/* Source + brand */}
         <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
           <span className="text-[9px] font-bold uppercase tracking-[0.14em] text-neutral-700">
             Source: {sourceLabel}

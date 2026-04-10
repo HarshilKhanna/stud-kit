@@ -17,7 +17,7 @@
  */
 
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
-import { getFirestore, Firestore } from "firebase/firestore";
+import { getFirestore, initializeFirestore, Firestore } from "firebase/firestore";
 import { getStorage, FirebaseStorage } from "firebase/storage";
 
 /**
@@ -46,7 +46,9 @@ const firebaseConfig = {
 const isFirstInit = getApps().length === 0;
 const app: FirebaseApp = isFirstInit ? initializeApp(firebaseConfig) : getApp();
 
-const db: Firestore            = getFirestore(app);
+const db: Firestore = isFirstInit 
+  ? initializeFirestore(app, { experimentalForceLongPolling: true })
+  : getFirestore(app);
 const storage: FirebaseStorage = getStorage(app);
 
 // TODO: remove this log once Firebase connection is confirmed working

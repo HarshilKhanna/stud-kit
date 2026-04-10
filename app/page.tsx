@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { trackEvent } from "@/lib/analytics";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Newsreader, Manrope } from "next/font/google";
@@ -96,7 +97,14 @@ export default function Home() {
 
   function selectOption(value: string) {
     setAnswers((prev) => ({ ...prev, [currentStep]: value }));
-    // Auto-advance on all steps except the last (where user confirms with button)
+    // Track each step individually
+    const eventMap: Record<string, string> = {
+      region:        "region_selected",
+      accommodation: "accommodation_selected",
+      arrival:       "arrival_selected",
+      budget:        "budget_selected",
+    };
+    trackEvent(eventMap[currentStep] ?? currentStep, { value });
     if (!isLastStep) {
       setTimeout(() => {
         setDirection(1);
@@ -114,6 +122,7 @@ export default function Home() {
       arrivalTiming: a.arrival,
       budget:        a.budget,
     };
+    trackEvent("kit_generated", { region: a.region, accommodation: a.accommodation, arrival: a.arrival, budget: a.budget });
     setStudentProfile(profile);
     router.push("/browse");
   }
@@ -171,7 +180,7 @@ export default function Home() {
             transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
             className="mb-4 text-[11px] font-bold uppercase tracking-[0.2em] text-neutral-400"
           >
-            The Academic Monograph · 2024 Edition
+            The Academic Monograph · 2026 Edition
           </motion.p>
 
           <motion.h1
@@ -491,7 +500,7 @@ export default function Home() {
             <div className="relative h-[360px] w-full overflow-hidden bg-[#EEEEEE]">
               <div className="absolute inset-0 flex flex-col justify-between p-10">
                 <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-400">
-                  Curated Essentials — 2024
+                  Curated Essentials — 2026
                 </p>
                 <div className="space-y-4">
                   {[
@@ -562,7 +571,7 @@ export default function Home() {
             STUDENTKIT
           </div>
           <div className="text-[10px] uppercase tracking-[0.18em] text-neutral-400">
-            © 2024 STUDENTKIT. THE ACADEMIC MONOGRAPH.
+            © 2026 STUDENTKIT. THE ACADEMIC MONOGRAPH.
           </div>
         </div>
         <div className="flex gap-10">

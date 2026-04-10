@@ -11,55 +11,13 @@ import {
 } from "react";
 import type { Item, Tower, StudentProfile } from "@/types";
 import {
-  CATALOG_IMAGE_REVISION,
-  DEFAULT_STUDENT_TOWER,
-  STUDENT_ITEMS,
-} from "@/data/studentData";
-import { coerceExternalUrl } from "@/lib/itemBuyUrl";
-import { normalizeItemImageUrl } from "@/lib/itemImageUrl";
-import { PENDING_IMAGE_URL } from "@/lib/imagePending";
-import { ProjectContext } from "@/context/ProjectContext";
+  addItem as fsAddItem,
+  updateItem as fsUpdateItem,
+  deleteItem as fsDeleteItem,
+  subscribeAllItems,
+} from "@/lib/firestore";
 
 const PROFILE_KEY = "studentkit_profile_v1";
-const CATALOG_KEY = "studentkit_catalog_v1";
-const IMAGE_REV_KEY = "studentkit_catalog_image_rev";
-
-/** Built-in catalogue by id — fills missing imageUrl after localStorage hydrate */
-const DEFAULT_ITEMS_BY_ID = new Map(STUDENT_ITEMS.map((i) => [i.id, i]));
-
-function hydrateStoredCatalogItem(row: Item): Item {
-  const externalUrl = coerceExternalUrl(row.name, row.externalUrl);
-  let imageUrl = normalizeItemImageUrl(row);
-  if (imageUrl !== PENDING_IMAGE_URL && !imageUrl) {
-    const d = DEFAULT_ITEMS_BY_ID.get(row.id)?.imageUrl?.trim();
-    if (d) imageUrl = d;
-  }
-  return { ...row, externalUrl, imageUrl };
-}
-
-/** Re-apply bundled `imageUrl` when `CATALOG_IMAGE_REVISION` was bumped (e.g. Unsplash → /public). */
-function syncBundledCatalogImages(items: Item[]): Item[] {
-  let storedRev = 0;
-  try {
-    storedRev = Number(localStorage.getItem(IMAGE_REV_KEY)) || 0;
-  } catch {
-    /* ignore */
-  }
-  if (storedRev >= CATALOG_IMAGE_REVISION) return items;
-
-  const next = items.map((row) => {
-    const def = DEFAULT_ITEMS_BY_ID.get(row.id);
-    if (!def) return row;
-    if ((row.imageUrl ?? "").trim() === PENDING_IMAGE_URL) return row;
-    return { ...row, imageUrl: def.imageUrl };
-  });
-  try {
-    localStorage.setItem(IMAGE_REV_KEY, String(CATALOG_IMAGE_REVISION));
-  } catch {
-    /* ignore */
-  }
-  return next;
-}
 
 const PRIORITY_ORDER: Record<string, number> = {
   "day-1": 0,
@@ -70,13 +28,11 @@ const PRIORITY_ORDER: Record<string, number> = {
 
 export interface DataContextValue {
   data: Tower;
-  /** Full catalogue (flattened), sorted by priority then name — for admin */
+  /** Full catalogue (flattened), sorted by priority then name */
   items: Item[];
-  /** Profile-filtered + sorted — for browse when profile set; all items when profile null */
+  /** Profile-filtered + sorted */
   filteredItems: Item[];
-  /** True until browser storage has been read */
   loading: boolean;
-  /** Storage and UI ready — safe to auto-open onboarding */
   hydrated: boolean;
   studentProfile: StudentProfile | null;
   setStudentProfile: (p: StudentProfile | null) => void;
@@ -134,60 +90,33 @@ function safeParseProfile(raw: string | null): StudentProfile | null {
 }
 
 export function DataProvider({ children }: { children: ReactNode }) {
-  const projectCtx = useContext(ProjectContext);
-  const isAdminScoped = Boolean(projectCtx);
-
-  const [data, setData] = useState<Tower>(() =>
-    isAdminScoped ? toTower([]) : DEFAULT_STUDENT_TOWER,
-  );
+  const [data, setData] = useState<Tower>(toTower([]));
   const [loading, setLoading] = useState(true);
   const [hydrated, setHydrated] = useState(false);
-  const [studentProfile, setStudentProfileState] = useState<StudentProfile | null>(
-    null,
-  );
+  const [studentProfile, setStudentProfileState] = useState<StudentProfile | null>(null);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
 
+  // Real-time Firestore subscription
+  useEffect(() => {
+    const unsubscribe = subscribeAllItems(
+      (items) => {
+        setData(toTower(items));
+        setLoading(false);
+        setHydrated(true);
+      },
+      (err) => {
+        console.error("[DataContext] Firestore subscription error:", err);
+        setLoading(false);
+        setHydrated(true);
+      },
+    );
+    return unsubscribe;
+  }, []);
+
+  // Student profile persisted in localStorage only
   useEffect(() => {
     if (typeof window === "undefined") return;
-
-    try {
-      const catRaw = localStorage.getItem(CATALOG_KEY);
-      if (catRaw) {
-        const parsed = JSON.parse(catRaw) as Item[];
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          let normalized: Item[] = parsed.map((row) =>
-            hydrateStoredCatalogItem(row as Item),
-          );
-          normalized = syncBundledCatalogImages(normalized);
-          setData(toTower(normalized));
-          try {
-            localStorage.setItem(CATALOG_KEY, JSON.stringify(normalized));
-          } catch {
-            /* ignore quota */
-          }
-        } else if (!isAdminScoped) {
-          setData(DEFAULT_STUDENT_TOWER);
-        }
-      } else if (isAdminScoped) {
-        setData(DEFAULT_STUDENT_TOWER);
-      }
-
-      setStudentProfileState(safeParseProfile(localStorage.getItem(PROFILE_KEY)));
-    } catch (e) {
-      console.error("StudentKit storage hydrate failed:", e);
-      if (isAdminScoped) setData(DEFAULT_STUDENT_TOWER);
-    }
-
-    setHydrated(true);
-    setLoading(false);
-  }, [isAdminScoped]);
-
-  const persistCatalog = useCallback((tower: Tower) => {
-    try {
-      localStorage.setItem(CATALOG_KEY, JSON.stringify(flattenTower(tower)));
-    } catch (e) {
-      console.error("StudentKit catalog persist failed:", e);
-    }
+    setStudentProfileState(safeParseProfile(localStorage.getItem(PROFILE_KEY)));
   }, []);
 
   const setStudentProfile = useCallback((p: StudentProfile | null) => {
@@ -217,44 +146,32 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return sortByPriorityThenName(base);
   }, [data, studentProfile]);
 
-  const addItem = useCallback(
-    (item: Item) => {
-      setData((prev) => {
-        const next = toTower([...flattenTower(prev), item]);
-        persistCatalog(next);
-        return next;
-      });
-    },
-    [persistCatalog],
-  );
+  const addItem = useCallback((item: Item) => {
+    setData((prev) => toTower([...flattenTower(prev), item]));
+    fsAddItem(item).catch((e) => console.error("[DataContext] addItem failed:", e));
+  }, []);
 
-  const updateItem = useCallback(
-    (id: string, patch: Partial<Item>) => {
-      setData((prev) => {
-        const next = toTower(
-          flattenTower(prev).map((item) =>
-            item.id === id ? { ...item, ...patch } : item,
-          ),
-        );
-        persistCatalog(next);
-        return next;
-      });
-    },
-    [persistCatalog],
-  );
+  const updateItem = useCallback((id: string, patch: Partial<Item>) => {
+    setData((prev) =>
+      toTower(
+        flattenTower(prev).map((item) =>
+          item.id === id ? { ...item, ...patch } : item,
+        ),
+      ),
+    );
+    fsUpdateItem(id, patch).catch((e) =>
+      console.error("[DataContext] updateItem failed:", e),
+    );
+  }, []);
 
-  const deleteItem = useCallback(
-    (id: string) => {
-      setData((prev) => {
-        const next = toTower(
-          flattenTower(prev).filter((item) => item.id !== id),
-        );
-        persistCatalog(next);
-        return next;
-      });
-    },
-    [persistCatalog],
-  );
+  const deleteItem = useCallback((id: string) => {
+    setData((prev) =>
+      toTower(flattenTower(prev).filter((item) => item.id !== id)),
+    );
+    fsDeleteItem(id).catch((e) =>
+      console.error("[DataContext] deleteItem failed:", e),
+    );
+  }, []);
 
   const value = useMemo<DataContextValue>(
     () => ({
@@ -289,9 +206,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     ],
   );
 
-  return (
-    <DataContext.Provider value={value}>{children}</DataContext.Provider>
-  );
+  return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 }
 
 export function useData(): DataContextValue {

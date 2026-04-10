@@ -2,7 +2,12 @@
 
 import { AnalyticsEvent } from "./helpers";
 
-const DEPTHS = ["25%", "50%", "75%", "100%"] as const;
+const MILESTONES = [
+  { depth: "25%", label: "First Quarter" },
+  { depth: "50%", label: "Halfway" },
+  { depth: "75%", label: "Three Quarters" },
+  { depth: "100%", label: "Full Page" },
+] as const;
 
 export function ScrollDepthCard({ events }: { events: AnalyticsEvent[] }) {
   const depthEvents = events.filter((e) => e.type === "scroll_depth");
@@ -11,70 +16,77 @@ export function ScrollDepthCard({ events }: { events: AnalyticsEvent[] }) {
     const d = e.payload?.depth;
     if (d) counts[d] = (counts[d] ?? 0) + 1;
   }
-  const total = Math.max(counts["25%"] ?? 0, 1);
+
+  const base    = counts["25%"] ?? 0;
   const hasData = depthEvents.length > 0;
 
   return (
-    <div className="border border-neutral-200 bg-white p-6 md:p-8">
-      <div className="mb-6 flex items-baseline justify-between">
-        <h2
-          className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400"
-        >
-          Scroll Depth
+    <div className="border border-neutral-200 bg-white">
+      <div className="flex items-baseline justify-between border-b border-neutral-100 px-6 py-4">
+        <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">
+          Browse Page Scroll Depth
         </h2>
-        <span className="text-[10px] uppercase tracking-[0.14em] text-neutral-500">
-          Engagement by scroll milestone
+        <span className="text-[10px] uppercase tracking-[0.14em] text-neutral-400">
+          Unique milestone hits
         </span>
       </div>
 
       {!hasData ? (
-        <p className="py-12 text-center text-[11px] uppercase tracking-widest text-neutral-500">
-          No data yet
+        <p className="py-10 text-center text-[11px] uppercase tracking-widest text-neutral-400">
+          No scroll data yet — visit the browse page to generate events.
         </p>
       ) : (
-        <>
-          {/* Vertical bar chart */}
-          <div className="flex items-end justify-around gap-4 border-b border-neutral-100 pb-4" style={{ height: 140 }}>
-            {DEPTHS.map((depth) => {
-              const count = counts[depth] ?? 0;
-              const pct   = Math.round((count / total) * 100);
-              return (
-                <div key={depth} className="flex flex-1 flex-col items-center gap-2">
-                  <span className="text-xs font-bold text-neutral-600">{pct}%</span>
+        <div className="grid grid-cols-4 divide-x divide-neutral-100">
+          {MILESTONES.map(({ depth, label }, i) => {
+            const count   = counts[depth] ?? 0;
+            const prev    = i === 0 ? base : (counts[MILESTONES[i - 1].depth] ?? 0);
+            const retPct  = prev > 0 ? Math.round((count / prev) * 100) : 0;
+            const barPct  = base > 0 ? Math.round((count / base) * 100) : 0;
+
+            return (
+              <div key={depth} className="flex flex-col gap-3 px-6 py-5">
+                {/* Depth label + count */}
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-neutral-400">
+                      {label}
+                    </p>
+                    <p
+                      className="mt-1 text-4xl font-light text-black"
+                      style={{ fontFamily: "var(--font-serif, serif)" }}
+                    >
+                      {count}
+                    </p>
+                  </div>
+                  <span className="mt-1 rounded-sm bg-neutral-100 px-1.5 py-0.5 text-[10px] font-bold text-neutral-500">
+                    {depth}
+                  </span>
+                </div>
+
+                {/* Retention from previous step */}
+                {i > 0 && (
+                  <p className="text-[10px] font-semibold text-neutral-400">
+                    {retPct}%{" "}
+                    <span className="font-normal text-neutral-300">retained from prev</span>
+                  </p>
+                )}
+                {i === 0 && (
+                  <p className="text-[10px] font-semibold text-neutral-400">
+                    Baseline
+                  </p>
+                )}
+
+                {/* Bar */}
+                <div className="relative h-[2px] w-full bg-neutral-100">
                   <div
-                    className="w-full bg-black transition-all duration-700"
-                    style={{ height: `${Math.max(pct, 2)}%`, maxHeight: 90 }}
+                    className="absolute left-0 top-0 h-full bg-black transition-all duration-700"
+                    style={{ width: `${barPct}%` }}
                   />
                 </div>
-              );
-            })}
-          </div>
-
-          {/* Labels */}
-          <div className="flex justify-around pt-3">
-            {DEPTHS.map((depth) => {
-              const count = counts[depth] ?? 0;
-              return (
-                <div key={depth} className="flex flex-1 flex-col items-center gap-0.5">
-                  <span className="text-[9px] font-bold uppercase tracking-[0.14em] text-neutral-400">
-                    {depth} Depth
-                  </span>
-                  <span className="text-[9px] uppercase tracking-widest text-neutral-500">
-                    {count} sessions
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Insight */}
-          {(counts["75%"] ?? 0) < (counts["25%"] ?? 0) * 0.6 && (
-            <p className="mt-5 border-t border-neutral-100 pt-4 text-xs text-neutral-400">
-              Engagement drops significantly after the 50% mark. Consider moving
-              critical call-to-actions higher in the page to increase conversion.
-            </p>
-          )}
-        </>
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );
