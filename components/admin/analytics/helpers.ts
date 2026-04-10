@@ -48,5 +48,5 @@ export function isToday(ts: AnalyticsEvent["timestamp"]): boolean {
 }
 
 const CARD_CLS =
-  "rounded-lg border border-neutral-200 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)]";
+  "border border-neutral-200 bg-white";
 export { CARD_CLS };

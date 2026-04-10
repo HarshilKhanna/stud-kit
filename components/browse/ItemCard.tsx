@@ -1,52 +1,38 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import type { Item, Source } from "@/types";
-import { isImagePending, PENDING_IMAGE_URL } from "@/lib/imagePending";
+import type { Item } from "@/types";
+import {
+  getItemImageDisplaySrc,
+  isItemImagePipelinePending,
+} from "@/lib/itemImageUrl";
 import { getItemBuyUrl } from "@/lib/itemBuyUrl";
 
-interface ItemCardProps {
-  item: Item;
-}
+const PRIORITY_BADGE: Record<string, string | null> = {
+  "day-1":   "Day 1",
+  "week-1":  "Immediate",
+  "month-1": null,
+  "optional": null,
+};
 
-function sourceBadge(source: Source): { label: string; className: string } {
-  switch (source) {
-    case "bring-from-india":
-      return {
-        label: "Bring from India",
-        className: "bg-orange-100 text-orange-900 border-orange-200/80",
-      };
-    case "buy-there":
-      return {
-        label: "Buy there",
-        className: "bg-sky-100 text-sky-900 border-sky-200/80",
-      };
-    default:
-      return {
-        label: "Either",
-        className: "bg-neutral-100 text-neutral-600 border-neutral-200/80",
-      };
-  }
-}
+const SOURCE_LABEL: Record<string, string> = {
+  "bring-from-india": "Bring from India",
+  "buy-there":        "Buy there",
+};
 
-/** Fixed tile + text block heights so every card matches urban-flat-kit grid behaviour. */
-export function ItemCard({ item }: ItemCardProps) {
-  const specs = item.specs || {};
+export function ItemCard({ item }: { item: Item }) {
   const [imageFailed, setImageFailed] = useState(false);
-  const buyUrl = getItemBuyUrl(item);
+  const buyUrl        = getItemBuyUrl(item);
+  const imgSrc        = getItemImageDisplaySrc(item);
+  const pipelinePending = isItemImagePipelinePending(item);
+  const badge         = PRIORITY_BADGE[item.priority] ?? null;
+  const sourceLabel   = SOURCE_LABEL[item.source] ?? "Either";
 
-  const meta =
-    (item.cardSpecKeys ?? [])
-      .slice(0, 2)
-      .map((key) => specs[key])
-      .filter(Boolean)
-      .join(" · ") || undefined;
-
-  const detailLine = [item.brand, meta].filter(Boolean).join(" · ");
-
-  const sb = sourceBadge(item.source);
+  useEffect(() => {
+    setImageFailed(false);
+  }, [imgSrc]);
 
   return (
     <motion.a
@@ -54,72 +40,78 @@ export function ItemCard({ item }: ItemCardProps) {
       target="_blank"
       rel="noopener noreferrer"
       whileTap={{ scale: 0.98 }}
-      transition={{ duration: 0.18, ease: "easeOut" }}
-      className="flex h-full min-h-0 w-full flex-col no-underline outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-2"
+      transition={{ duration: 0.15, ease: "easeOut" }}
+      className="group flex w-full flex-col no-underline outline-none focus-visible:ring-2 focus-visible:ring-neutral-400"
     >
-      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-[--border] bg-[--tile]">
-        <div className="relative aspect-square w-full shrink-0 overflow-hidden bg-[#fafafa]">
-          {!isImagePending(item.imageUrl) && !imageFailed ? (
-            <Image
-              src={item.imageUrl}
-              alt={item.name}
-              fill
-              unoptimized
-              sizes="(max-width: 640px) 50vw, (max-width: 768px) 25vw, (max-width: 1024px) 20vw, 16vw"
-              className="object-contain p-2"
-              onError={() => setImageFailed(true)}
-            />
-          ) : item.imageUrl === PENDING_IMAGE_URL ? (
-            <div className="flex h-full w-full items-center justify-center px-2 text-center text-xs text-neutral-400">
-              Processing…
-            </div>
-          ) : (
-            <div className="flex h-full w-full items-center justify-center">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-10 w-10 text-neutral-200"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.5}
-              >
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <circle cx="8.5" cy="8.5" r="1.5" />
-                <path d="M21 15l-5-5L5 21" />
-              </svg>
-            </div>
-          )}
+      {/* Image */}
+      <div className="relative aspect-square w-full overflow-hidden bg-[#F9F9F9]">
+        {!pipelinePending && imgSrc && !imageFailed ? (
+          <Image
+            src={imgSrc}
+            alt={item.name}
+            fill
+            unoptimized
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 17vw"
+            className="object-contain p-2 transition-transform duration-500 group-hover:scale-105"
+            onError={() => setImageFailed(true)}
+          />
+        ) : pipelinePending ? (
+          <div className="flex h-full w-full items-center justify-center text-[10px] uppercase tracking-widest text-neutral-300">
+            Processing…
+          </div>
+        ) : (
+          <div className="flex h-full w-full items-center justify-center">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-8 w-8 text-neutral-200"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.5}
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <path d="M21 15l-5-5L5 21" />
+            </svg>
+          </div>
+        )}
+
+        {/* Priority badge — top-left of image */}
+        {badge && (
+          <span className="absolute left-0 top-0 bg-black px-2 py-1 text-[8px] font-bold uppercase tracking-[0.18em] text-white">
+            {badge}
+          </span>
+        )}
+      </div>
+
+      {/* Text area */}
+      <div className="pt-3">
+        {/* Name + arrow */}
+        <div className="flex items-start justify-between gap-1.5">
+          <p
+            className="line-clamp-2 flex-1 text-[15px] leading-snug text-black"
+            style={{ fontFamily: "var(--font-serif), serif" }}
+          >
+            {item.name}
+          </p>
+          <span className="mt-0.5 flex-shrink-0 text-sm text-neutral-400 transition-colors group-hover:text-black">
+            ↗
+          </span>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-1 px-3 py-1.5">
-          <div className="min-h-0 space-y-1">
-            <p className="line-clamp-2 h-10 text-xs font-semibold leading-5 text-[--text-primary]">
-              {item.name}
-            </p>
-
-            <div className="flex h-7 shrink-0 items-center justify-between gap-1">
-              <span
-                className={[
-                  "inline-flex min-w-0 max-w-[70%] truncate rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
-                  sb.className,
-                ].join(" ")}
-                title={sb.label}
-              >
-                {sb.label}
+        {/* Source + brand */}
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+          <span className="text-[9px] font-bold uppercase tracking-[0.14em] text-neutral-700">
+            Source: {sourceLabel}
+          </span>
+          {item.brand && (
+            <>
+              <span className="text-neutral-300 text-[9px]">·</span>
+              <span className="text-[9px] uppercase tracking-[0.12em] text-neutral-400">
+                {item.brand}
               </span>
-              {item.priority === "day-1" ? (
-                <span className="inline-flex shrink-0 rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-red-800">
-                  Day 1
-                </span>
-              ) : (
-                <span className="w-0 shrink-0" aria-hidden />
-              )}
-            </div>
-
-            <p className="line-clamp-2 h-[2.75em] shrink-0 text-[11px] leading-snug text-[--text-secondary]">
-              {detailLine || "\u00a0"}
-            </p>
-          </div>
+            </>
+          )}
         </div>
       </div>
     </motion.a>

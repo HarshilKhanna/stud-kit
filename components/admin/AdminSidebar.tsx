@@ -2,64 +2,55 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  LayoutDashboard,
-  Layers3,
-  Package,
-  BarChart2,
-  ArrowLeft,
-  LogOut,
-  X,
-} from "lucide-react";
+import { LayoutGrid, Package, BarChart2, ArrowLeft, LogOut, X } from "lucide-react";
 import { useAdminAuth } from "@/context/AdminAuthContext";
-import { useProject } from "@/context/ProjectContext";
-import { ProjectSwitcher } from "./ProjectSwitcher";
 
 const NAV = [
-  { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/items", label: "Items", icon: Package },
-  { href: "/admin/analytics", label: "Analytics", icon: BarChart2 },
+  { href: "/admin/dashboard", label: "Dashboard", icon: LayoutGrid },
+  { href: "/admin/items",     label: "Items",     icon: Package    },
+  { href: "/admin/analytics", label: "Analytics", icon: BarChart2  },
 ];
 
 interface AdminSidebarProps {
-  /** Mobile-only: whether the drawer is open */
   mobileOpen?: boolean;
-  /** Called when the user dismisses the sidebar on mobile */
   onClose?: () => void;
 }
 
 export function AdminSidebar({ mobileOpen = false, onClose }: AdminSidebarProps) {
   const pathname = usePathname();
   const { logout } = useAdminAuth();
-  const { activeProject } = useProject();
 
   const sidebarContent = (
-    <aside className="flex h-full w-60 flex-shrink-0 flex-col border-r border-neutral-200 bg-white">
-      {/* Logo row — includes close button on mobile */}
-      <div className="flex items-start justify-between px-5 pt-6 pb-4 border-b border-neutral-100">
+    <aside
+      className="flex h-full w-48 flex-shrink-0 flex-col border-r border-neutral-100 bg-white"
+      style={{ fontFamily: "var(--font-sans-alt), Manrope, sans-serif" }}
+    >
+      {/* Brand */}
+      <div className="flex items-start justify-between border-b border-neutral-100 px-5 pb-5 pt-6">
         <div>
-          <p className="text-sm font-semibold tracking-tight text-neutral-900">StudentKit</p>
-          <p className="text-[11px] text-neutral-400 font-light mt-0.5">Admin</p>
-          {activeProject?.name && (
-            <p className="mt-1 text-xs text-neutral-400">{activeProject.name}</p>
-          )}
+          <p
+            className="text-sm font-bold tracking-tight text-black"
+            style={{ fontFamily: "var(--font-serif), serif" }}
+          >
+            StudentKit
+          </p>
+          <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-neutral-400">
+            Academic Monograph
+          </p>
         </div>
         {onClose && (
           <button
             type="button"
             onClick={onClose}
-            className="md:hidden flex h-7 w-7 items-center justify-center rounded-md text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 -mt-0.5 -mr-1"
-            aria-label="Close menu"
+            className="md:hidden -mr-1 -mt-0.5 flex h-7 w-7 items-center justify-center text-neutral-400 hover:text-neutral-700"
           >
             <X className="h-4 w-4" />
           </button>
         )}
       </div>
 
-      <ProjectSwitcher onClose={onClose} />
-
       {/* Nav */}
-      <nav className="flex-1 px-3 pt-2 space-y-0.5">
+      <nav className="flex-1 px-3 pt-1">
         {NAV.map(({ href, label, icon: Icon }) => {
           const active = pathname.startsWith(href);
           return (
@@ -67,44 +58,48 @@ export function AdminSidebar({ mobileOpen = false, onClose }: AdminSidebarProps)
               key={href}
               href={href}
               onClick={onClose}
-              className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors ${
+              className={[
+                "flex items-center gap-3 px-3 py-2.5 transition-colors",
                 active
-                  ? "border-l-2 border-neutral-900 pl-[10px] font-medium text-neutral-900 bg-neutral-50"
-                  : "font-normal text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800"
-              }`}
+                  ? "border-l-2 border-black pl-[10px] text-black"
+                  : "text-neutral-600 hover:text-black",
+              ].join(" ")}
             >
-              <Icon className="h-4 w-4 flex-shrink-0" />
-              {label}
+              <Icon className="h-3.5 w-3.5 flex-shrink-0" />
+              <span
+                className={[
+                  "text-[11px] uppercase tracking-[0.16em]",
+                  active ? "font-bold" : "font-semibold",
+                ].join(" ")}
+              >
+                {label}
+              </span>
             </Link>
           );
         })}
       </nav>
 
-      {/* Bottom links */}
-      <div className="px-3 pb-5 pt-3 border-t border-neutral-100 space-y-0.5">
-        <Link
-          href="/admin/projects"
-          onClick={onClose}
-          className="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-normal text-neutral-500 transition-colors hover:bg-neutral-50 hover:text-neutral-800"
-        >
-          <Layers3 className="h-4 w-4 flex-shrink-0" />
-          Projects
-        </Link>
+      {/* Bottom actions */}
+      <div className="border-t border-neutral-100 px-3 pb-6 pt-3">
         <Link
           href="/browse"
           onClick={onClose}
-          className="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-normal text-neutral-500 transition-colors hover:bg-neutral-50 hover:text-neutral-800"
+          className="flex items-center gap-3 px-3 py-2.5 text-neutral-600 transition-colors hover:text-black"
         >
-          <ArrowLeft className="h-4 w-4 flex-shrink-0" />
-          Back to browse
+          <ArrowLeft className="h-3.5 w-3.5 flex-shrink-0" />
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em]">
+            Back to browse
+          </span>
         </Link>
         <button
           type="button"
           onClick={() => { logout(); onClose?.(); }}
-          className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm font-normal text-neutral-400 transition-colors hover:bg-neutral-50 hover:text-neutral-700"
+          className="flex w-full items-center gap-3 px-3 py-2.5 text-neutral-400 transition-colors hover:text-neutral-800"
         >
-          <LogOut className="h-4 w-4 flex-shrink-0" />
-          Logout
+          <LogOut className="h-3.5 w-3.5 flex-shrink-0" />
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em]">
+            Logout
+          </span>
         </button>
       </div>
     </aside>
@@ -112,23 +107,16 @@ export function AdminSidebar({ mobileOpen = false, onClose }: AdminSidebarProps)
 
   return (
     <>
-      {/* Desktop — always visible */}
-      <div className="hidden md:flex h-screen flex-shrink-0">
-        {sidebarContent}
-      </div>
+      {/* Desktop */}
+      <div className="hidden h-screen flex-shrink-0 md:flex">{sidebarContent}</div>
 
-      {/* Mobile — slide-in drawer with backdrop */}
+      {/* Mobile drawer */}
       <div
         className={`md:hidden fixed inset-0 z-50 transition-opacity duration-300 ${
           mobileOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
         }`}
       >
-        {/* Backdrop */}
-        <div
-          className="absolute inset-0 bg-black/30"
-          onClick={onClose}
-        />
-        {/* Panel */}
+        <div className="absolute inset-0 bg-black/30" onClick={onClose} />
         <div
           className={`absolute left-0 top-0 h-full transition-transform duration-300 ease-out ${
             mobileOpen ? "translate-x-0" : "-translate-x-full"

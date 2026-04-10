@@ -4,60 +4,45 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { useProject } from "@/context/ProjectContext";
 
-interface ProjectSwitcherProps {
-  onClose?: () => void;
-}
-
-function statusDotClass(isActive: boolean): string {
-  if (isActive) return "bg-emerald-500";
-  return "bg-neutral-400";
-}
-
-export function ProjectSwitcher({ onClose }: ProjectSwitcherProps) {
+export function ProjectSwitcher({ onClose }: { onClose?: () => void }) {
   const { projects, activeProject, setActiveProject, loading } = useProject();
-  const [open, setOpen] = useState(false);
-  const [flashMsg, setFlashMsg] = useState<string | null>(null);
-  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [open, setOpen]           = useState(false);
+  const [flashMsg, setFlashMsg]   = useState<string | null>(null);
+  const rootRef                   = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const onPointerDown = (e: MouseEvent) => {
-      if (!rootRef.current) return;
-      if (!rootRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+    const h = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
     };
-    document.addEventListener("mousedown", onPointerDown);
-    return () => document.removeEventListener("mousedown", onPointerDown);
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
   }, []);
 
   useEffect(() => {
     if (!flashMsg) return;
-    const id = setTimeout(() => setFlashMsg(null), 1600);
+    const id = setTimeout(() => setFlashMsg(null), 1500);
     return () => clearTimeout(id);
   }, [flashMsg]);
 
   return (
-    <div ref={rootRef} className="relative px-3 pt-3 pb-2">
+    <div ref={rootRef} className="relative border-b border-neutral-100 px-4 py-3">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex w-full items-center justify-between rounded-full border px-3 py-1.5 text-left text-xs font-normal text-neutral-700 transition-colors hover:bg-white"
-        style={{ borderColor: "#E5E2DC", backgroundColor: "#F5F3EF" }}
+        className="flex w-full items-center justify-between border border-neutral-200 bg-neutral-50 px-3 py-2 text-left transition-colors hover:bg-white"
+        style={{ fontFamily: "var(--font-sans-alt), sans-serif" }}
       >
-        <span className="truncate">
-          {loading ? "Loading projects..." : activeProject?.name ?? "Select project"}
+        <span className="truncate text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-600">
+          {loading ? "Loading…" : (activeProject?.name ?? "Select kit")}
         </span>
         <ChevronDown
-          className={`ml-2 h-3.5 w-3.5 flex-shrink-0 text-neutral-500 transition-transform ${open ? "rotate-180" : ""}`}
+          className={`ml-2 h-3 w-3 flex-shrink-0 text-neutral-400 transition-transform ${open ? "rotate-180" : ""}`}
         />
       </button>
 
       {open && (
-        <div
-          className="absolute left-3 right-3 top-[calc(100%-2px)] z-20 overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg"
-          role="menu"
-        >
-          <div className="max-h-56 overflow-y-auto py-1.5">
+        <div className="absolute left-4 right-4 top-[calc(100%-4px)] z-20 border border-neutral-200 bg-white shadow-lg">
+          <div className="max-h-52 overflow-y-auto py-1">
             {projects.map((project) => {
               const isActive = activeProject?.id === project.id;
               return (
@@ -66,37 +51,39 @@ export function ProjectSwitcher({ onClose }: ProjectSwitcherProps) {
                   type="button"
                   onClick={() => {
                     void setActiveProject(project);
-                    setFlashMsg(`Switched to ${project.name}`);
+                    setFlashMsg(`Now showing: ${project.name}`);
                     setOpen(false);
                     onClose?.();
                   }}
-                  className={`relative flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors ${
+                  className={[
+                    "relative flex w-full items-center justify-between px-3 py-2.5 text-left text-xs transition-colors",
                     isActive
-                      ? "bg-neutral-50 text-neutral-900"
-                      : "text-neutral-600 hover:bg-neutral-50 hover:text-neutral-800"
-                  }`}
+                      ? "bg-neutral-50 font-semibold text-black"
+                      : "text-neutral-500 hover:bg-neutral-50 hover:text-black",
+                  ].join(" ")}
                 >
                   {isActive && (
-                    <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-[#1a1a1a]" />
+                    <span className="absolute bottom-1.5 left-0 top-1.5 w-0.5 bg-black" />
                   )}
-                  <span className={`truncate pr-2 ${isActive ? "font-semibold" : "font-normal"}`}>
-                    {project.name}
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 text-[11px] text-neutral-500">
-                    <span className={`h-1.5 w-1.5 rounded-full ${statusDotClass(project.isActive)}`} />
-                    <span>{project.isActive ? "active" : "inactive"}</span>
+                  <span className="truncate uppercase tracking-[0.12em]">{project.name}</span>
+                  <span className="flex items-center gap-1.5 text-[9px] uppercase tracking-widest text-neutral-400">
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full ${project.isActive ? "bg-black" : "bg-neutral-300"}`}
+                    />
+                    {project.isActive ? "active" : "inactive"}
                   </span>
                 </button>
               );
             })}
             {!loading && projects.length === 0 && (
-              <p className="px-3 py-2 text-xs text-neutral-400">No projects found.</p>
+              <p className="px-3 py-2 text-[11px] text-neutral-500">No kits found.</p>
             )}
           </div>
         </div>
       )}
+
       {flashMsg && (
-        <p className="mt-1 px-2 text-[11px] text-neutral-500">{flashMsg}</p>
+        <p className="mt-1 text-[10px] uppercase tracking-widest text-neutral-400">{flashMsg}</p>
       )}
     </div>
   );

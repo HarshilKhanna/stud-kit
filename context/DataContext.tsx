@@ -10,12 +10,56 @@ import {
   ReactNode,
 } from "react";
 import type { Item, Tower, StudentProfile } from "@/types";
-import { DEFAULT_STUDENT_TOWER } from "@/data/studentData";
+import {
+  CATALOG_IMAGE_REVISION,
+  DEFAULT_STUDENT_TOWER,
+  STUDENT_ITEMS,
+} from "@/data/studentData";
 import { coerceExternalUrl } from "@/lib/itemBuyUrl";
+import { normalizeItemImageUrl } from "@/lib/itemImageUrl";
+import { PENDING_IMAGE_URL } from "@/lib/imagePending";
 import { ProjectContext } from "@/context/ProjectContext";
 
 const PROFILE_KEY = "studentkit_profile_v1";
 const CATALOG_KEY = "studentkit_catalog_v1";
+const IMAGE_REV_KEY = "studentkit_catalog_image_rev";
+
+/** Built-in catalogue by id — fills missing imageUrl after localStorage hydrate */
+const DEFAULT_ITEMS_BY_ID = new Map(STUDENT_ITEMS.map((i) => [i.id, i]));
+
+function hydrateStoredCatalogItem(row: Item): Item {
+  const externalUrl = coerceExternalUrl(row.name, row.externalUrl);
+  let imageUrl = normalizeItemImageUrl(row);
+  if (imageUrl !== PENDING_IMAGE_URL && !imageUrl) {
+    const d = DEFAULT_ITEMS_BY_ID.get(row.id)?.imageUrl?.trim();
+    if (d) imageUrl = d;
+  }
+  return { ...row, externalUrl, imageUrl };
+}
+
+/** Re-apply bundled `imageUrl` when `CATALOG_IMAGE_REVISION` was bumped (e.g. Unsplash → /public). */
+function syncBundledCatalogImages(items: Item[]): Item[] {
+  let storedRev = 0;
+  try {
+    storedRev = Number(localStorage.getItem(IMAGE_REV_KEY)) || 0;
+  } catch {
+    /* ignore */
+  }
+  if (storedRev >= CATALOG_IMAGE_REVISION) return items;
+
+  const next = items.map((row) => {
+    const def = DEFAULT_ITEMS_BY_ID.get(row.id);
+    if (!def) return row;
+    if ((row.imageUrl ?? "").trim() === PENDING_IMAGE_URL) return row;
+    return { ...row, imageUrl: def.imageUrl };
+  });
+  try {
+    localStorage.setItem(IMAGE_REV_KEY, String(CATALOG_IMAGE_REVISION));
+  } catch {
+    /* ignore */
+  }
+  return next;
+}
 
 const PRIORITY_ORDER: Record<string, number> = {
   "day-1": 0,
@@ -111,11 +155,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
       if (catRaw) {
         const parsed = JSON.parse(catRaw) as Item[];
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const normalized: Item[] = parsed.map((row) => ({
-            ...row,
-            externalUrl: coerceExternalUrl(row.name, row.externalUrl),
-          }));
+          let normalized: Item[] = parsed.map((row) =>
+            hydrateStoredCatalogItem(row as Item),
+          );
+          normalized = syncBundledCatalogImages(normalized);
           setData(toTower(normalized));
+          try {
+            localStorage.setItem(CATALOG_KEY, JSON.stringify(normalized));
+          } catch {
+            /* ignore quota */
+          }
         } else if (!isAdminScoped) {
           setData(DEFAULT_STUDENT_TOWER);
         }

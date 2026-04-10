@@ -2,21 +2,11 @@
 
 import React, { useRef, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  ChevronDown,
-  Check,
-  LayoutGrid,
-  SlidersHorizontal,
-  X,
-  Package,
-  MapPin,
-} from "lucide-react";
-import { type LucideIcon } from "lucide-react";
+import { ChevronDown, Check, SlidersHorizontal, X } from "lucide-react";
 import { SortOption, SORT_OPTIONS } from "./SortBar";
-import { Container } from "@/components/layout/Container";
 import type { Source } from "@/types";
 
-/** Canonical `Item.category` values (admin, data, dashboard). */
+/* ─── Data ───────────────────────────────────────────── */
 export const FILTER_CATEGORIES = [
   "Bedding & Sleep",
   "Kitchen & Cooking",
@@ -32,7 +22,6 @@ export const FILTER_CATEGORIES = [
 
 export type Category = (typeof FILTER_CATEGORIES)[number];
 
-/** Short labels for browse filter chips only. */
 export const BROWSE_CATEGORY_CHIPS = [
   "Bedding",
   "Kitchen",
@@ -48,21 +37,20 @@ export const BROWSE_CATEGORY_CHIPS = [
 
 export type BrowseCategoryChip = (typeof BROWSE_CATEGORY_CHIPS)[number];
 
-/** Maps browse/admin short labels to canonical `Item.category` strings. */
 export const BROWSE_CHIP_TO_ITEM_CATEGORIES: Record<
   BrowseCategoryChip,
   readonly string[]
 > = {
-  Bedding: ["Bedding & Sleep"],
-  Kitchen: ["Kitchen & Cooking"],
-  Clothing: ["Clothing & Weather"],
-  Electronics: ["Electronics & Adapters"],
-  Bathroom: ["Bathroom & Toiletries"],
-  Study: ["Study & Desk"],
+  Bedding:            ["Bedding & Sleep"],
+  Kitchen:            ["Kitchen & Cooking"],
+  Clothing:           ["Clothing & Weather"],
+  Electronics:        ["Electronics & Adapters"],
+  Bathroom:           ["Bathroom & Toiletries"],
+  Study:              ["Study & Desk"],
   "Food & Groceries": ["Food & Groceries (non-perishable Indian staples)"],
-  Documents: ["Documents & Admin"],
-  Health: ["Health & Medicine"],
-  Comfort: ["Comfort & Mental Health"],
+  Documents:          ["Documents & Admin"],
+  Health:             ["Health & Medicine"],
+  Comfort:            ["Comfort & Mental Health"],
 };
 
 export function itemCategoryMatchesBrowseChips(
@@ -75,40 +63,22 @@ export function itemCategoryMatchesBrowseChips(
   );
 }
 
-/** Short dashboard/browse label for a stored category, or the raw value if unknown. */
 export function shortCategoryLabel(itemCategory: string): string {
   for (const chip of BROWSE_CATEGORY_CHIPS) {
-    if (BROWSE_CHIP_TO_ITEM_CATEGORIES[chip].includes(itemCategory)) {
-      return chip;
-    }
+    if (BROWSE_CHIP_TO_ITEM_CATEGORIES[chip].includes(itemCategory)) return chip;
   }
   return itemCategory;
 }
 
 export type SourceFilter = "all" | Source;
 
-const SOURCE_OPTIONS: { id: SourceFilter; label: string; icon: LucideIcon }[] = [
-  { id: "all", label: "All sources", icon: LayoutGrid },
-  { id: "bring-from-india", label: "Bring from India", icon: Package },
-  { id: "buy-there", label: "Buy there", icon: MapPin },
+const SOURCE_OPTIONS: { id: SourceFilter; label: string }[] = [
+  { id: "all",              label: "All" },
+  { id: "bring-from-india", label: "India" },
+  { id: "buy-there",        label: "Local" },
 ];
 
-const chipBtn = (active: boolean) =>
-  [
-    "flex flex-shrink-0 items-center rounded-full border px-3 py-1 text-sm font-medium transition-all duration-150 whitespace-nowrap",
-    active
-      ? "border-neutral-300 bg-white text-neutral-900 shadow-sm"
-      : "border-neutral-200 text-neutral-500 hover:border-neutral-300 hover:bg-neutral-100 hover:text-neutral-700",
-  ].join(" ");
-
-const sourceChipBtn = (active: boolean) =>
-  [
-    "flex flex-shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium transition-all duration-150 whitespace-nowrap",
-    active
-      ? "border-neutral-300 bg-white text-neutral-900 shadow-sm"
-      : "border-neutral-200 text-neutral-500 hover:border-neutral-300 hover:bg-neutral-100 hover:text-neutral-700",
-  ].join(" ");
-
+/* ─── Props ──────────────────────────────────────────── */
 interface FilterBarProps {
   activeBrowseChips: BrowseCategoryChip[];
   onBrowseChipsChange: (chips: BrowseCategoryChip[]) => void;
@@ -116,146 +86,60 @@ interface FilterBarProps {
   onSourceChange: (s: SourceFilter) => void;
   sort: SortOption;
   onSortChange: (value: SortOption) => void;
+  itemCount?: number;
 }
 
-function DesktopChips({
-  activeBrowseChips,
-  onBrowseChipsChange,
-  sourceFilter,
-  onSourceChange,
-}: {
-  activeBrowseChips: BrowseCategoryChip[];
-  onBrowseChipsChange: (chips: BrowseCategoryChip[]) => void;
-  sourceFilter: SourceFilter;
-  onSourceChange: (s: SourceFilter) => void;
-}) {
-  const isAll = activeBrowseChips.length === 0;
-
-  return (
-    <div className="hidden min-w-0 flex-1 flex-col gap-2 md:flex">
-      <div
-        className="-mx-1 flex flex-nowrap items-center gap-1 overflow-x-auto px-1 pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        style={{ WebkitOverflowScrolling: "touch" }}
-      >
-        <button
-          type="button"
-          onClick={() => onBrowseChipsChange([])}
-          className={chipBtn(isAll)}
-        >
-          All
-        </button>
-        {BROWSE_CATEGORY_CHIPS.map((cat) => {
-          const active = !isAll && activeBrowseChips.includes(cat);
-          return (
-            <button
-              key={cat}
-              type="button"
-              onClick={() => onBrowseChipsChange([cat])}
-              className={chipBtn(active)}
-            >
-              {cat}
-            </button>
-          );
-        })}
-      </div>
-
-      <div
-        className="-mx-1 flex flex-nowrap items-center gap-1 overflow-x-auto border-t border-neutral-200/60 px-1 pt-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        style={{ WebkitOverflowScrolling: "touch" }}
-      >
-        <span className="flex-shrink-0 pr-1 text-[11px] font-medium uppercase tracking-[0.12em] text-neutral-400">
-          Source
-        </span>
-        {SOURCE_OPTIONS.map((opt) => {
-          const active = sourceFilter === opt.id;
-          const Icon = opt.icon;
-          return (
-            <button
-              key={opt.id}
-              type="button"
-              onClick={() => onSourceChange(opt.id)}
-              className={sourceChipBtn(active)}
-            >
-              <Icon className="h-3 w-3 flex-shrink-0" />
-              {opt.label}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
+/* ─── Sort dropdown ──────────────────────────────────── */
 function SortDropdown({
   sort,
   onSortChange,
-  label = true,
 }: {
   sort: SortOption;
   onSortChange: (v: SortOption) => void;
-  label?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const selectedLabel = SORT_OPTIONS.find((o) => o.value === sort)?.label ?? "Featured";
+  const label = SORT_OPTIONS.find((o) => o.value === sort)?.label ?? "Featured";
 
   useEffect(() => {
     if (!open) return;
-    const h = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
-    };
+    const h = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const h = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("keydown", h);
-    return () => document.removeEventListener("keydown", h);
   }, [open]);
 
   return (
     <div ref={ref} className="relative flex-shrink-0">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1 text-sm select-none text-neutral-500 transition-colors hover:text-neutral-700"
+        className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-400 transition-colors hover:text-black select-none"
+        style={{ fontFamily: "var(--font-sans-alt), sans-serif" }}
       >
-        {label && <span>Sort by:</span>}
-        <span className="font-semibold text-neutral-800">{selectedLabel}</span>
-        <motion.span
-          animate={{ rotate: open ? 180 : 0 }}
-          transition={{ duration: 0.18 }}
-          className="flex items-center"
-        >
-          <ChevronDown className="h-3.5 w-3.5 text-neutral-400" />
+        <span>Sort: {label}</span>
+        <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.18 }} className="flex">
+          <ChevronDown className="h-3 w-3" />
         </motion.span>
       </button>
 
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.97, y: -4 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.97, y: -4 }}
-            transition={{ duration: 0.15, ease: "easeOut" }}
-            className="absolute right-0 top-full z-50 mt-2 w-48 overflow-hidden rounded-xl border border-neutral-100 bg-white py-1 shadow-lg"
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.15 }}
+            className="absolute right-0 top-full z-50 mt-2 w-44 overflow-hidden border border-neutral-100 bg-white py-1 shadow-lg"
           >
             {SORT_OPTIONS.map((opt) => {
               const active = sort === opt.value;
               return (
                 <button
                   key={opt.value}
-                  onClick={() => {
-                    onSortChange(opt.value);
-                    setOpen(false);
-                  }}
-                  className="flex w-full items-center justify-between px-4 py-2.5 text-sm text-neutral-700 transition-colors hover:bg-neutral-50"
+                  onClick={() => { onSortChange(opt.value); setOpen(false); }}
+                  className="flex w-full items-center justify-between px-4 py-2.5 text-[11px] text-neutral-700 hover:bg-neutral-50"
                 >
-                  <span className={active ? "font-medium text-neutral-900" : ""}>{opt.label}</span>
-                  {active && <Check className="h-3.5 w-3.5 text-neutral-500" />}
+                  <span className={active ? "font-semibold text-black" : ""}>{opt.label}</span>
+                  {active && <Check className="h-3 w-3 text-neutral-500" />}
                 </button>
               );
             })}
@@ -266,47 +150,24 @@ function SortDropdown({
   );
 }
 
-function MobileSheet({
-  title,
-  onClose,
-  children,
-}: {
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
+/* ─── Mobile sheet ───────────────────────────────────── */
+function MobileSheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
+    return () => { document.body.style.overflow = prev; };
   }, []);
-
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", h);
-    return () => document.removeEventListener("keydown", h);
-  }, [onClose]);
 
   return (
     <motion.div
       className="fixed inset-0 z-50 flex items-end bg-black/40 backdrop-blur-sm"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       transition={{ duration: 0.14 }}
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <motion.div
         className="max-h-[85vh] w-full overflow-y-auto rounded-t-2xl bg-white"
-        initial={{ y: "100%" }}
-        animate={{ y: 0 }}
-        exit={{ y: "100%" }}
+        initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
         transition={{ type: "spring", stiffness: 340, damping: 38 }}
       >
         <div className="flex justify-center pt-3 pb-1">
@@ -314,10 +175,7 @@ function MobileSheet({
         </div>
         <div className="flex items-center justify-between px-5 py-3">
           <span className="text-base font-semibold text-neutral-900">{title}</span>
-          <button
-            onClick={onClose}
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 hover:bg-neutral-200"
-          >
+          <button onClick={onClose} className="flex h-11 w-11 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 hover:bg-neutral-200">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -329,11 +187,10 @@ function MobileSheet({
   );
 }
 
+/* ─── Mobile filter sheet ────────────────────────────── */
 function MobileFilterSheet({
-  activeBrowseChips,
-  onBrowseChipsChange,
-  sourceFilter,
-  onSourceChange,
+  activeBrowseChips, onBrowseChipsChange,
+  sourceFilter, onSourceChange,
   onClose,
 }: {
   activeBrowseChips: BrowseCategoryChip[];
@@ -343,71 +200,36 @@ function MobileFilterSheet({
   onClose: () => void;
 }) {
   const allSelected = activeBrowseChips.length === 0;
-
   return (
     <MobileSheet title="Filter" onClose={onClose}>
       <div className="px-5 pt-4 pb-2">
-        <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-neutral-400">
-          Source
-        </p>
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400">Source</p>
         {SOURCE_OPTIONS.map((opt) => {
           const checked = sourceFilter === opt.id;
-          const Icon = opt.icon;
           return (
-            <button
-              key={opt.id}
-              type="button"
-              onClick={() => onSourceChange(opt.id)}
-              className="flex min-h-[44px] w-full items-center gap-3 py-2"
-            >
-              <span
-                className={[
-                  "flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border transition-colors",
-                  checked ? "border-neutral-900 bg-neutral-900" : "border-neutral-300",
-                ].join(" ")}
-              >
+            <button key={opt.id} type="button" onClick={() => onSourceChange(opt.id)}
+              className="flex min-h-[44px] w-full items-center gap-3 py-2">
+              <span className={["flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border transition-colors", checked ? "border-black bg-black" : "border-neutral-300"].join(" ")}>
                 {checked && <Check className="h-3 w-3 text-white" />}
               </span>
-              <span className="flex items-center gap-2 text-sm font-medium text-neutral-800">
-                <Icon className="h-4 w-4 text-neutral-500" /> {opt.label}
-              </span>
+              <span className="text-sm font-medium text-neutral-800">{opt.label}</span>
             </button>
           );
         })}
 
-        <p className="mb-2 mt-4 text-[11px] font-medium uppercase tracking-[0.12em] text-neutral-400">
-          Category
-        </p>
-        <button
-          onClick={() => onBrowseChipsChange([])}
-          className="flex min-h-[44px] w-full items-center gap-3 py-2"
-        >
-          <span
-            className={[
-              "flex h-5 w-5 items-center justify-center rounded border transition-colors",
-              allSelected ? "border-neutral-900 bg-neutral-900" : "border-neutral-300",
-            ].join(" ")}
-          >
+        <p className="mb-2 mt-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400">Category</p>
+        <button onClick={() => onBrowseChipsChange([])} className="flex min-h-[44px] w-full items-center gap-3 py-2">
+          <span className={["flex h-5 w-5 items-center justify-center rounded border transition-colors", allSelected ? "border-black bg-black" : "border-neutral-300"].join(" ")}>
             {allSelected && <Check className="h-3 w-3 text-white" />}
           </span>
           <span className="text-sm font-medium text-neutral-800">All</span>
         </button>
-
         {BROWSE_CATEGORY_CHIPS.map((cat) => {
           const checked = activeBrowseChips.includes(cat);
           return (
-            <button
-              key={cat}
-              type="button"
-              onClick={() => onBrowseChipsChange(checked ? [] : [cat])}
-              className="flex min-h-[44px] w-full items-center gap-3 py-2"
-            >
-              <span
-                className={[
-                  "flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border transition-colors",
-                  checked ? "border-neutral-900 bg-neutral-900" : "border-neutral-300",
-                ].join(" ")}
-              >
+            <button key={cat} type="button" onClick={() => onBrowseChipsChange(checked ? [] : [cat])}
+              className="flex min-h-[44px] w-full items-center gap-3 py-2">
+              <span className={["flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border transition-colors", checked ? "border-black bg-black" : "border-neutral-300"].join(" ")}>
                 {checked && <Check className="h-3 w-3 text-white" />}
               </span>
               <span className="min-w-0 text-left text-sm font-medium text-neutral-800">{cat}</span>
@@ -419,30 +241,17 @@ function MobileFilterSheet({
   );
 }
 
-function MobileSortSheet({
-  sort,
-  onSortChange,
-  onClose,
-}: {
-  sort: SortOption;
-  onSortChange: (v: SortOption) => void;
-  onClose: () => void;
-}) {
+/* ─── Mobile sort sheet ──────────────────────────────── */
+function MobileSortSheet({ sort, onSortChange, onClose }: { sort: SortOption; onSortChange: (v: SortOption) => void; onClose: () => void; }) {
   return (
     <MobileSheet title="Sort by" onClose={onClose}>
       <div className="px-5 pt-4 pb-2">
         {SORT_OPTIONS.map((opt) => {
           const active = sort === opt.value;
           return (
-            <button
-              key={opt.value}
-              onClick={() => {
-                onSortChange(opt.value);
-                onClose();
-              }}
-              className="flex min-h-[44px] w-full items-center justify-between py-2 text-sm text-neutral-700"
-            >
-              <span className={active ? "font-medium text-neutral-900" : ""}>{opt.label}</span>
+            <button key={opt.value} onClick={() => { onSortChange(opt.value); onClose(); }}
+              className="flex min-h-[44px] w-full items-center justify-between py-2 text-sm text-neutral-700">
+              <span className={active ? "font-semibold text-black" : ""}>{opt.label}</span>
               {active && <Check className="h-3.5 w-3.5 text-neutral-500" />}
             </button>
           );
@@ -452,6 +261,7 @@ function MobileSortSheet({
   );
 }
 
+/* ─── Main FilterBar ─────────────────────────────────── */
 export function FilterBar({
   activeBrowseChips,
   onBrowseChipsChange,
@@ -462,52 +272,95 @@ export function FilterBar({
 }: FilterBarProps) {
   const [filterOpen, setFilterOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
-  const activeCount =
-    activeBrowseChips.length + (sourceFilter !== "all" ? 1 : 0);
-  const sortLabel = SORT_OPTIONS.find((o) => o.value === sort)?.label ?? "Featured";
+  const activeCount = activeBrowseChips.length + (sourceFilter !== "all" ? 1 : 0);
+  const isAllChips = activeBrowseChips.length === 0;
+
+  const tabClass = (active: boolean) =>
+    [
+      "flex-shrink-0 pb-2 text-[11px] font-semibold uppercase tracking-[0.14em] transition-colors whitespace-nowrap",
+      active
+        ? "border-b border-black text-black"
+        : "text-neutral-600 hover:text-neutral-800",
+    ].join(" ");
+
+  const sourceTabClass = (active: boolean) =>
+    [
+      "flex-shrink-0 text-[10px] font-semibold uppercase tracking-[0.14em] transition-colors",
+      active ? "text-black" : "text-neutral-600 hover:text-neutral-800",
+    ].join(" ");
 
   return (
     <>
-      <div className="sticky top-0 z-20 border-b border-neutral-200/70 bg-[#f5f5f3]">
-        <Container>
-          <div className="flex flex-col gap-2 py-2 md:flex-row md:items-start">
-            <DesktopChips
-              activeBrowseChips={activeBrowseChips}
-              onBrowseChipsChange={onBrowseChipsChange}
-              sourceFilter={sourceFilter}
-              onSourceChange={onSourceChange}
-            />
-
-            <div className="flex flex-1 items-center gap-2 md:hidden">
-              <button
-                type="button"
-                onClick={() => setFilterOpen(true)}
-                className="flex min-h-[44px] items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3.5 py-1.5 text-sm font-medium text-neutral-700 shadow-sm transition-colors hover:bg-neutral-50"
-              >
-                <SlidersHorizontal className="h-3.5 w-3.5" />
-                Filter
-                {activeCount > 0 && (
-                  <span className="flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-neutral-900 px-1 text-[10px] font-semibold text-white">
-                    {activeCount}
-                  </span>
-                )}
+      <div
+        className="sticky top-[60px] z-20 border-b border-neutral-200/60 bg-[#F9F9F9]"
+        style={{ fontFamily: "var(--font-sans-alt), sans-serif" }}
+      >
+        {/* ── Desktop ── */}
+        <div className="hidden px-8 md:block md:px-16">
+          <div className="flex items-end gap-6 pt-4 pb-0">
+            {/* Category tabs */}
+            <div
+              className="flex min-w-0 flex-1 items-end gap-6 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              style={{ WebkitOverflowScrolling: "touch" }}
+            >
+              <button type="button" onClick={() => onBrowseChipsChange([])} className={tabClass(isAllChips)}>
+                All Items
               </button>
-
-              <button
-                type="button"
-                onClick={() => setSortOpen(true)}
-                className="flex min-h-[44px] items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3.5 py-1.5 text-sm font-medium text-neutral-700 shadow-sm transition-colors hover:bg-neutral-50"
-              >
-                <ChevronDown className="h-3.5 w-3.5 text-neutral-400" />
-                <span className="font-semibold">{sortLabel}</span>
-              </button>
+              {BROWSE_CATEGORY_CHIPS.map((cat) => {
+                const active = !isAllChips && activeBrowseChips.includes(cat);
+                return (
+                  <button key={cat} type="button" onClick={() => onBrowseChipsChange([cat])} className={tabClass(active)}>
+                    {cat}
+                  </button>
+                );
+              })}
             </div>
 
-            <div className="hidden flex-shrink-0 md:block md:pt-0.5">
+            {/* Source filter + sort — right side */}
+            <div className="flex flex-shrink-0 items-center gap-4 pb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] font-semibold uppercase tracking-[0.16em] text-neutral-500">
+                  Source:
+                </span>
+                {SOURCE_OPTIONS.map((opt, i) => (
+                  <React.Fragment key={opt.id}>
+                    {i > 0 && <span className="text-neutral-200 text-[10px]">·</span>}
+                    <button type="button" onClick={() => onSourceChange(opt.id)} className={sourceTabClass(sourceFilter === opt.id)}>
+                      {opt.label}
+                    </button>
+                  </React.Fragment>
+                ))}
+              </div>
+              <div className="h-3 w-px bg-neutral-200" />
               <SortDropdown sort={sort} onSortChange={onSortChange} />
             </div>
           </div>
-        </Container>
+        </div>
+
+        {/* ── Mobile ── */}
+        <div className="flex items-center gap-2 px-6 py-3 md:hidden">
+          <button
+            type="button"
+            onClick={() => setFilterOpen(true)}
+            className="flex min-h-[40px] items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-neutral-600 shadow-sm"
+          >
+            <SlidersHorizontal className="h-3 w-3" />
+            Filter
+            {activeCount > 0 && (
+              <span className="flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-black px-1 text-[9px] font-bold text-white">
+                {activeCount}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setSortOpen(true)}
+            className="flex min-h-[40px] items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-neutral-600 shadow-sm"
+          >
+            <ChevronDown className="h-3 w-3 text-neutral-400" />
+            {SORT_OPTIONS.find((o) => o.value === sort)?.label ?? "Sort"}
+          </button>
+        </div>
       </div>
 
       <AnimatePresence>
@@ -521,14 +374,9 @@ export function FilterBar({
           />
         )}
       </AnimatePresence>
-
       <AnimatePresence>
         {sortOpen && (
-          <MobileSortSheet
-            sort={sort}
-            onSortChange={onSortChange}
-            onClose={() => setSortOpen(false)}
-          />
+          <MobileSortSheet sort={sort} onSortChange={onSortChange} onClose={() => setSortOpen(false)} />
         )}
       </AnimatePresence>
     </>

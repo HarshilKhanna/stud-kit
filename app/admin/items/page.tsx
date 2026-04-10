@@ -34,10 +34,11 @@ import type {
   AccommodationType,
   BudgetTier,
 } from "@/types";
+import { PENDING_IMAGE_URL } from "@/lib/imagePending";
 import {
-  PENDING_IMAGE_URL,
-  isImagePending,
-} from "@/lib/imagePending";
+  getItemImageDisplaySrc,
+  isItemImagePipelinePending,
+} from "@/lib/itemImageUrl";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -80,12 +81,6 @@ type AdminItem = {
   relevantRegions: Region[];
   relevantAccommodations: AccommodationType[];
   budgetTiers: BudgetTier[];
-  tip: string;
-  availabilityNote: string;
-  indianCommunityNote: string;
-  priceInr: string;
-  priceLocal: string;
-  priceCurrency: string;
   specs: AdminSpecRow[];
 };
 
@@ -175,12 +170,6 @@ function toAdminItem(item: Item): AdminItem {
     relevantRegions: [...item.relevantRegions],
     relevantAccommodations: [...item.relevantAccommodations],
     budgetTiers: [...item.budgetTiers],
-    tip: item.tip ?? "",
-    availabilityNote: item.availabilityNote ?? "",
-    indianCommunityNote: item.indianCommunityNote ?? "",
-    priceInr: item.price?.inr != null ? String(item.price.inr) : "",
-    priceLocal: item.price?.local != null ? String(item.price.local) : "",
-    priceCurrency: item.price?.localCurrency ?? "",
     specs,
   };
 }
@@ -195,19 +184,6 @@ function fromAdminItem(a: AdminItem): Item {
       if (row.showOnCard) cardSpecKeys.push(key);
     }
   }
-  const inrN = a.priceInr.trim() ? Number(a.priceInr) : NaN;
-  const localN = a.priceLocal.trim() ? Number(a.priceLocal) : NaN;
-  const hasPrice =
-    (Number.isFinite(inrN) && inrN >= 0) ||
-    (Number.isFinite(localN) && localN >= 0) ||
-    Boolean(a.priceCurrency.trim());
-  const price = hasPrice
-    ? {
-        inr: Number.isFinite(inrN) && inrN >= 0 ? inrN : undefined,
-        local: Number.isFinite(localN) && localN >= 0 ? localN : undefined,
-        localCurrency: a.priceCurrency.trim() || undefined,
-      }
-    : undefined;
   const item: Item = {
     id: a.id,
     name: a.name.trim(),
@@ -223,10 +199,6 @@ function fromAdminItem(a: AdminItem): Item {
     relevantRegions: a.relevantRegions,
     relevantAccommodations: a.relevantAccommodations,
     budgetTiers: a.budgetTiers,
-    tip: a.tip.trim() || undefined,
-    availabilityNote: a.availabilityNote.trim() || undefined,
-    indianCommunityNote: a.indianCommunityNote.trim() || undefined,
-    price,
   };
   return item;
 }
@@ -443,12 +415,6 @@ function emptyAdminItem(): Omit<AdminItem, "id"> {
     relevantRegions: [...ALL_REGIONS],
     relevantAccommodations: [...ALL_ACCOMMODATIONS],
     budgetTiers: [...ALL_BUDGET_TIERS],
-    tip: "",
-    availabilityNote: "",
-    indianCommunityNote: "",
-    priceInr: "",
-    priceLocal: "",
-    priceCurrency: "",
     specs: [{ id: uid(), label: "Dimensions", isCustom: false, value: "", showOnCard: false }],
   };
 }
@@ -528,7 +494,7 @@ function ImageUpload({
         onChange={handleChange}
       />
       {showPreview ? (
-        <div className="relative h-40 w-full overflow-hidden rounded-md border border-neutral-200">
+        <div className="relative h-40 w-full overflow-hidden border border-neutral-200 bg-neutral-50">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={displaySrc} alt="Preview" className="h-full w-full object-contain p-2" />
           <button
@@ -537,18 +503,16 @@ function ImageUpload({
               revokePreview();
               setLocalPreview("");
               onPendingFile(null);
-              // If user is previewing a newly selected local file, revert to saved URL.
-              // If user is looking at the saved URL, clear it.
               onChange(localPreview ? (restoredUrl ?? "") : "");
               if (inputRef.current) inputRef.current.value = "";
             }}
-            className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-neutral-200 hover:bg-neutral-50"
+            className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center bg-white ring-1 ring-neutral-200 hover:bg-neutral-50"
           >
             <X className="h-3 w-3 text-neutral-500" />
           </button>
         </div>
       ) : value === PENDING_IMAGE_URL ? (
-        <div className="flex h-36 w-full items-center justify-center rounded-md border border-neutral-200 bg-neutral-50 px-3 text-center text-xs text-neutral-400">
+        <div className="flex h-36 w-full items-center justify-center border border-neutral-200 bg-neutral-50 px-3 text-center text-[11px] font-bold uppercase tracking-widest text-neutral-500">
           Image still processing…
         </div>
       ) : (
@@ -557,10 +521,10 @@ function ImageUpload({
           onClick={() => inputRef.current?.click()}
           onDrop={handleDrop}
           onDragOver={(e) => e.preventDefault()}
-          className="flex h-36 w-full flex-col items-center justify-center gap-2 rounded-md border border-dashed border-neutral-300 bg-neutral-50 text-neutral-400 transition-colors hover:border-neutral-400 hover:bg-neutral-100"
+          className="flex h-36 w-full flex-col items-center justify-center gap-2 border border-dashed border-neutral-300 bg-neutral-50 text-neutral-400 transition-colors hover:border-neutral-400 hover:bg-neutral-100"
         >
           <Upload className="h-5 w-5" />
-          <span className="text-xs">Click to upload or drag and drop</span>
+          <span className="text-[11px] font-bold uppercase tracking-widest">Click to upload or drag and drop</span>
         </button>
       )}
       <p className="mt-1 text-[11px] text-neutral-400">
@@ -632,29 +596,29 @@ function DimensionInput({
     emit(parts, v || "cm");
   };
 
-  const inputCls = "w-full rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-xs text-neutral-900 outline-none focus:border-neutral-400 focus:bg-white text-center";
+  const dimInputCls = "w-full border-0 border-b border-neutral-200 bg-transparent px-0 py-1.5 text-xs text-neutral-900 outline-none focus:border-black focus:ring-0 text-center";
 
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-      <div className="flex items-center gap-1">
-        <input type="text" value={parts[0]} onChange={(e) => updatePart(0, e.target.value)} placeholder="—" className={inputCls} />
+      <div className="flex items-center gap-2">
+        <input type="text" value={parts[0]} onChange={(e) => updatePart(0, e.target.value)} placeholder="—" className={dimInputCls} />
         <span className="flex-shrink-0 text-[11px] text-neutral-400">×</span>
-        <input type="text" value={parts[1]} onChange={(e) => updatePart(1, e.target.value)} placeholder="—" className={inputCls} />
+        <input type="text" value={parts[1]} onChange={(e) => updatePart(1, e.target.value)} placeholder="—" className={dimInputCls} />
         <span className="flex-shrink-0 text-[11px] text-neutral-400">×</span>
-        <input type="text" value={parts[2]} onChange={(e) => updatePart(2, e.target.value)} placeholder="—" className={inputCls} />
+        <input type="text" value={parts[2]} onChange={(e) => updatePart(2, e.target.value)} placeholder="—" className={dimInputCls} />
         {isCustomUnit ? (
           <input
             type="text"
             value={customUnit}
             onChange={(e) => updateCustomUnit(e.target.value)}
             placeholder="unit"
-            className="w-14 flex-shrink-0 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-xs text-neutral-900 outline-none focus:border-neutral-400 focus:bg-white"
+            className="w-14 flex-shrink-0 border-0 border-b border-neutral-200 bg-transparent px-0 py-1.5 text-xs text-neutral-900 outline-none focus:border-black focus:ring-0"
           />
         ) : (
           <select
             value={unit}
             onChange={(e) => updateUnit(e.target.value)}
-            className="w-16 flex-shrink-0 rounded-md border border-neutral-200 bg-neutral-50 px-1.5 py-1.5 text-xs text-neutral-900 outline-none focus:border-neutral-400 focus:bg-white"
+            className="w-16 flex-shrink-0 border-0 border-b border-neutral-200 bg-transparent px-0 py-1.5 text-xs text-neutral-900 outline-none focus:border-black focus:ring-0"
           >
             {DIMENSION_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
             <option value="__custom__">Other…</option>
@@ -695,13 +659,13 @@ function SpecRow({
       value={row.label}
       onChange={(e) => onUpdate({ label: e.target.value })}
       placeholder="Custom label"
-      className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-2.5 py-1.5 text-xs text-neutral-900 outline-none focus:border-neutral-400 focus:bg-white"
+      className="w-full border-0 border-b border-neutral-200 bg-transparent px-0 py-1.5 text-xs text-neutral-900 outline-none focus:border-black focus:ring-0"
     />
   ) : (
     <select
       value={row.label}
       onChange={(e) => handleLabelChange(e.target.value)}
-      className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-2.5 py-1.5 text-xs text-neutral-900 outline-none focus:border-neutral-400 focus:bg-white"
+      className="w-full border-0 border-b border-neutral-200 bg-transparent px-0 py-1.5 text-xs text-neutral-900 outline-none focus:border-black focus:ring-0"
     >
       <option value="">Label</option>
       {SPEC_LABEL_OPTIONS.filter((o) => o !== "Custom").map((o) => (
@@ -719,7 +683,7 @@ function SpecRow({
       value={row.value}
       onChange={(e) => onUpdate({ value: e.target.value })}
       placeholder="Value"
-      className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-2.5 py-1.5 text-xs text-neutral-900 outline-none focus:border-neutral-400 focus:bg-white"
+      className="w-full border-0 border-b border-neutral-200 bg-transparent px-0 py-1.5 text-xs text-neutral-900 outline-none focus:border-black focus:ring-0"
     />
   );
 
@@ -749,7 +713,7 @@ function SpecRow({
   return (
     <>
       {/* Mobile: two-row layout */}
-      <div className="rounded-md bg-neutral-50/80 p-2 md:hidden">
+      <div className="border-b border-neutral-100 pb-3 md:hidden">
         <div className="flex items-center gap-2">
           <div className="min-w-0 flex-1">{labelEl}</div>
           {deleteEl}
@@ -795,6 +759,13 @@ function ItemDrawer({
   const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
 
   const cardCount = form.specs.filter((s) => s.showOnCard).length;
+
+  const imageUrlFieldValue = useMemo(() => {
+    const d = form.imageData;
+    if (!d || d === PENDING_IMAGE_URL) return "";
+    if (d.startsWith("http") || d.startsWith("/")) return d;
+    return "";
+  }, [form.imageData]);
 
   const updateSpec = (id: string, patch: Partial<AdminSpecRow>) => {
     setForm((f) => ({
@@ -850,13 +821,6 @@ function ItemDrawer({
     if (form.budgetTiers.length === 0) {
       e.budgets = "Select at least one budget tier.";
     }
-    if (form.priceInr.trim() && !Number.isFinite(Number(form.priceInr))) {
-      e.priceInr = "Enter a valid number.";
-    }
-    if (form.priceLocal.trim() && !Number.isFinite(Number(form.priceLocal))) {
-      e.priceLocal = "Enter a valid number.";
-    }
-
     // Check each spec row: label must be set and value must be non-empty
     form.specs.forEach((s, i) => {
       const lbl = s.isCustom ? s.label.trim() : s.label;
@@ -884,29 +848,25 @@ function ItemDrawer({
     onSave({ ...form, id, imageData } as AdminItem, pendingImageFile);
   };
 
-  const inputCls = "w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-900 outline-none transition-colors focus:border-neutral-400 focus:bg-white";
-  const errCls = "mt-1 text-[11px] text-red-500";
-  const labelCls = "block text-[11px] font-medium uppercase tracking-[0.14em] text-neutral-400 mb-1";
+  const inputCls = "w-full bg-transparent border-0 border-b border-neutral-200 focus:border-black focus:ring-0 px-0 py-2 text-sm text-neutral-900 outline-none transition-colors";
+  const errCls = "mt-1 text-[11px] text-neutral-500";
+  const labelCls = "block text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 mb-2";
 
   return (
     <>
       {/* Backdrop */}
       {open && (
         <div
-          className="fixed inset-0 z-30 bg-black/20"
+          className="fixed inset-0 z-30 bg-black/20 backdrop-blur-[2px]"
           onClick={onClose}
         />
       )}
 
-      {/* Drawer panel
-          Mobile  : full-width bottom sheet, slides up   (translate-y)
-          Tablet  : 420px right panel, slides in from right (md: translate-x)
-          Desktop : 520px right panel                    (lg: w-[520px])
-      */}
+      {/* Drawer panel */}
       <div
-        className={`fixed z-40 flex flex-col bg-white shadow-xl transition-transform duration-300 ease-out
-          inset-x-0 bottom-0 max-h-[92vh] rounded-t-2xl
-          md:inset-x-auto md:right-0 md:top-0 md:bottom-auto md:h-screen md:max-h-none md:rounded-none md:w-[420px]
+        className={`fixed z-40 flex flex-col bg-white shadow-2xl transition-transform duration-300 ease-out
+          inset-x-0 bottom-0 max-h-[92vh]
+          md:inset-x-auto md:right-0 md:top-0 md:bottom-auto md:h-screen md:max-h-none md:w-[480px]
           lg:w-[520px]
           ${open ? "translate-y-0 md:translate-x-0" : "translate-y-full md:translate-y-0 md:translate-x-full"}`}
       >
@@ -916,14 +876,17 @@ function ItemDrawer({
         </div>
 
         {/* Sticky header */}
-        <div className="flex flex-shrink-0 items-center justify-between border-b border-neutral-100 px-4 py-3 md:px-6 md:py-4">
-          <p className="text-sm font-medium text-neutral-900">
-            {mode === "add" ? "Add item" : "Edit item"}
-          </p>
+        <div className="flex flex-shrink-0 items-center justify-between border-b border-neutral-100 px-6 py-6 md:px-10 md:py-8">
+          <h3
+            className="text-2xl font-normal tracking-tight text-black"
+            style={{ fontFamily: "var(--font-serif, serif)" }}
+          >
+            {mode === "add" ? "Add Registry Item" : "Edit Registry Item"}
+          </h3>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-11 w-11 items-center justify-center rounded-md text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700 md:h-7 md:w-7"
+            className="flex h-8 w-8 items-center justify-center text-neutral-400 transition-colors hover:text-black"
           >
             <X className="h-4 w-4" />
           </button>
@@ -933,23 +896,26 @@ function ItemDrawer({
         <form
           id="item-form"
           onSubmit={handleSubmit}
-          className="flex-1 overflow-y-auto px-4 py-4 space-y-5 md:px-6 md:py-5"
+          className="flex-1 overflow-y-auto px-6 py-6 space-y-8 md:px-10 md:py-8"
         >
-          {/* Name + Brand — stacked on mobile, side by side on desktop */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {/* Item name — large serif input */}
+          <div>
+            <label className={labelCls}>Item Name</label>
+            <input
+              type="text"
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder="Enter name..."
+              className="w-full bg-transparent border-0 border-b border-neutral-200 focus:border-black focus:ring-0 px-0 py-3 text-2xl text-neutral-900 outline-none transition-colors"
+              style={{ fontFamily: "var(--font-serif, serif)" }}
+            />
+            {errors.name && <p className={errCls}>{errors.name}</p>}
+          </div>
+
+          {/* Brand + Category */}
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div>
-              <label className={labelCls}>Name</label>
-              <input
-                type="text"
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="Item name"
-                className={inputCls}
-              />
-              {errors.name && <p className={errCls}>{errors.name}</p>}
-            </div>
-            <div>
-              <label className={labelCls}>Brand (optional)</label>
+              <label className={labelCls}>Brand</label>
               <input
                 type="text"
                 value={form.brand}
@@ -958,66 +924,89 @@ function ItemDrawer({
                 className={inputCls}
               />
             </div>
-          </div>
-
-          {/* Category */}
-          <div>
-            <label className={labelCls}>Category</label>
-            <select
-              value={form.category}
-              onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-              className={inputCls}
-            >
-              <option value="">Select category…</option>
-              {BROWSE_CATEGORY_CHIPS.map((chip) => {
-                const canonical = BROWSE_CHIP_TO_ITEM_CATEGORIES[chip][0];
-                return (
-                  <option key={chip} value={canonical}>
-                    {chip}
-                  </option>
-                );
-              })}
-            </select>
-            {errors.category && <p className={errCls}>{errors.category}</p>}
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {/* Category — second col of Brand+Category grid */}
             <div>
-              <label className={labelCls}>Priority</label>
+              <label className={labelCls}>Category</label>
               <select
-                value={form.priority}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, priority: e.target.value as Priority }))
-                }
+                value={form.category}
+                onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
                 className={inputCls}
               >
-                <option value="day-1">Day 1</option>
-                <option value="week-1">First week</option>
-                <option value="month-1">First month</option>
-                <option value="optional">Optional</option>
+                <option value="">Select category…</option>
+                {BROWSE_CATEGORY_CHIPS.map((chip) => {
+                  const canonical = BROWSE_CHIP_TO_ITEM_CATEGORIES[chip][0];
+                  return (
+                    <option key={chip} value={canonical}>
+                      {chip}
+                    </option>
+                  );
+                })}
               </select>
-            </div>
-            <div>
-              <label className={labelCls}>Source</label>
-              <select
-                value={form.source}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, source: e.target.value as Source }))
-                }
-                className={inputCls}
-              >
-                <option value="bring-from-india">Bring from India</option>
-                <option value="buy-there">Buy there</option>
-                <option value="either">Either</option>
-              </select>
+              {errors.category && <p className={errCls}>{errors.category}</p>}
             </div>
           </div>
 
+          {/* Priority + Source */}
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+            <div>
+              <label className={labelCls}>Priority Tier</label>
+              <div className="mt-3 flex flex-col gap-3">
+                {([
+                  { value: "day-1", label: "Day 1 — Critical" },
+                  { value: "week-1", label: "First Week" },
+                  { value: "month-1", label: "First Month" },
+                  { value: "optional", label: "Optional" },
+                ] as const).map(({ value, label }) => (
+                  <label key={value} className="flex cursor-pointer items-center gap-3 group">
+                    <input
+                      type="radio"
+                      name="priority"
+                      value={value}
+                      checked={form.priority === value}
+                      onChange={() => setForm((f) => ({ ...f, priority: value }))}
+                      className="h-3 w-3 border-neutral-400 text-black focus:ring-0 focus:ring-offset-0"
+                      style={{ borderRadius: 0 }}
+                    />
+                    <span className="text-[11px] font-bold uppercase tracking-widest text-neutral-500 group-hover:text-black transition-colors">
+                      {label}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className={labelCls}>Acquisition Source</label>
+              <div className="mt-3 flex flex-col gap-3">
+                {([
+                  { value: "bring-from-india", label: "Bring from India" },
+                  { value: "buy-there", label: "Buy There" },
+                  { value: "either", label: "Either" },
+                ] as const).map(({ value, label }) => (
+                  <label key={value} className="flex cursor-pointer items-center gap-3 group">
+                    <input
+                      type="radio"
+                      name="source"
+                      value={value}
+                      checked={form.source === value}
+                      onChange={() => setForm((f) => ({ ...f, source: value }))}
+                      className="h-3 w-3 border-neutral-400 text-black focus:ring-0 focus:ring-offset-0"
+                      style={{ borderRadius: 0 }}
+                    />
+                    <span className="text-[11px] font-bold uppercase tracking-widest text-neutral-500 group-hover:text-black transition-colors">
+                      {label}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Relevant regions */}
           <div>
-            <label className={labelCls}>Relevant regions</label>
-            <div className="mt-2 max-h-36 space-y-1.5 overflow-y-auto rounded-md border border-neutral-200 bg-neutral-50 p-2">
+            <label className={labelCls}>Relevant Regions</label>
+            <div className="mt-3 grid grid-cols-2 gap-y-3">
               {ALL_REGIONS.map((r) => (
-                <label key={r} className="flex cursor-pointer items-center gap-2 text-xs text-neutral-700">
+                <label key={r} className="flex cursor-pointer items-center gap-3">
                   <input
                     type="checkbox"
                     checked={form.relevantRegions.includes(r)}
@@ -1029,20 +1018,22 @@ function ItemDrawer({
                           : [...f.relevantRegions, r],
                       }))
                     }
-                    className="h-3.5 w-3.5 accent-neutral-900"
+                    className="h-3 w-3 accent-neutral-900"
+                    style={{ borderRadius: 0 }}
                   />
-                  <span className="font-mono text-[10px] text-neutral-500">{r}</span>
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-neutral-500">{r}</span>
                 </label>
               ))}
             </div>
             {errors.regions && <p className={errCls}>{errors.regions}</p>}
           </div>
 
+          {/* Accommodations */}
           <div>
-            <label className={labelCls}>Relevant accommodations</label>
-            <div className="mt-2 space-y-1.5 rounded-md border border-neutral-200 bg-neutral-50 p-2">
+            <label className={labelCls}>Accommodations</label>
+            <div className="mt-3 flex flex-wrap gap-x-6 gap-y-3">
               {ALL_ACCOMMODATIONS.map((r) => (
-                <label key={r} className="flex cursor-pointer items-center gap-2 text-xs text-neutral-700">
+                <label key={r} className="flex cursor-pointer items-center gap-3">
                   <input
                     type="checkbox"
                     checked={form.relevantAccommodations.includes(r)}
@@ -1054,9 +1045,10 @@ function ItemDrawer({
                           : [...f.relevantAccommodations, r],
                       }))
                     }
-                    className="h-3.5 w-3.5 accent-neutral-900"
+                    className="h-3 w-3 accent-neutral-900"
+                    style={{ borderRadius: 0 }}
                   />
-                  <span className="font-mono text-[10px] text-neutral-500">{r}</span>
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-neutral-500">{r}</span>
                 </label>
               ))}
             </div>
@@ -1064,10 +1056,10 @@ function ItemDrawer({
           </div>
 
           <div>
-            <label className={labelCls}>Budget tiers</label>
-            <div className="mt-2 flex flex-wrap gap-3 rounded-md border border-neutral-200 bg-neutral-50 p-2">
+            <label className={labelCls}>Budget Tiers</label>
+            <div className="mt-3 flex flex-wrap gap-x-6 gap-y-3">
               {ALL_BUDGET_TIERS.map((r) => (
-                <label key={r} className="flex cursor-pointer items-center gap-2 text-xs text-neutral-700">
+                <label key={r} className="flex cursor-pointer items-center gap-3">
                   <input
                     type="checkbox"
                     checked={form.budgetTiers.includes(r)}
@@ -1079,83 +1071,14 @@ function ItemDrawer({
                           : [...f.budgetTiers, r],
                       }))
                     }
-                    className="h-3.5 w-3.5 accent-neutral-900"
+                    className="h-3 w-3 accent-neutral-900"
+                    style={{ borderRadius: 0 }}
                   />
-                  {r}
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-neutral-500">{r}</span>
                 </label>
               ))}
             </div>
             {errors.budgets && <p className={errCls}>{errors.budgets}</p>}
-          </div>
-
-          <div>
-            <label className={labelCls}>Tip</label>
-            <textarea
-              value={form.tip}
-              onChange={(e) => setForm((f) => ({ ...f, tip: e.target.value }))}
-              rows={3}
-              className={inputCls}
-              placeholder="Advice from a senior student…"
-            />
-          </div>
-
-          <div>
-            <label className={labelCls}>Availability note</label>
-            <textarea
-              value={form.availabilityNote}
-              onChange={(e) => setForm((f) => ({ ...f, availabilityNote: e.target.value }))}
-              rows={2}
-              className={inputCls}
-            />
-          </div>
-
-          <div>
-            <label className={labelCls}>Indian community note</label>
-            <textarea
-              value={form.indianCommunityNote}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, indianCommunityNote: e.target.value }))
-              }
-              rows={2}
-              className={inputCls}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div>
-              <label className={labelCls}>Price (INR)</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={form.priceInr}
-                onChange={(e) => setForm((f) => ({ ...f, priceInr: e.target.value }))}
-                placeholder="e.g. 1500"
-                className={inputCls}
-              />
-              {errors.priceInr && <p className={errCls}>{errors.priceInr}</p>}
-            </div>
-            <div>
-              <label className={labelCls}>Price (local)</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={form.priceLocal}
-                onChange={(e) => setForm((f) => ({ ...f, priceLocal: e.target.value }))}
-                placeholder="e.g. 45"
-                className={inputCls}
-              />
-              {errors.priceLocal && <p className={errCls}>{errors.priceLocal}</p>}
-            </div>
-            <div>
-              <label className={labelCls}>Local currency</label>
-              <input
-                type="text"
-                value={form.priceCurrency}
-                onChange={(e) => setForm((f) => ({ ...f, priceCurrency: e.target.value }))}
-                placeholder="USD, GBP…"
-                className={inputCls}
-              />
-            </div>
           </div>
 
           {/* External URL */}
@@ -1171,9 +1094,19 @@ function ItemDrawer({
             {errors.externalUrl && <p className={errCls}>{errors.externalUrl}</p>}
           </div>
 
-          {/* Image upload — required */}
+          {/* Image URL or file — at least one required (validated below) */}
           <div>
             <label className={labelCls}>Image <span className="text-red-400">*</span></label>
+            <input
+              type="url"
+              value={imageUrlFieldValue}
+              onChange={(e) => {
+                setPendingImageFile(null);
+                setForm((f) => ({ ...f, imageData: e.target.value.trim() }));
+              }}
+              placeholder="https://… or /image.webp — optional if you upload"
+              className={inputCls + " mb-2"}
+            />
             <ImageUpload
               value={form.imageData}
               restoredUrl={
@@ -1218,7 +1151,7 @@ function ItemDrawer({
             <div className="mb-2 flex items-center justify-between">
               <label className={labelCls + " mb-0"}>Specs</label>
               {cardLimitMsg && (
-                <p className="text-[11px] text-amber-500">Only 2 specs can show on the card at once.</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-neutral-400">Max 2 specs on card.</p>
               )}
             </div>
             <div className="space-y-2">
@@ -1249,23 +1182,24 @@ function ItemDrawer({
               Add spec
             </button>
           </div>
+
         </form>
 
         {/* Sticky footer */}
-        <div className="flex flex-shrink-0 items-center justify-between border-t border-neutral-100 px-4 py-3 md:px-6 md:py-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="min-h-[44px] px-2 text-sm text-neutral-400 hover:text-neutral-700"
-          >
-            Cancel
-          </button>
+        <div className="flex flex-shrink-0 flex-col gap-3 border-t border-neutral-100 px-6 py-6 md:px-10">
           <button
             type="submit"
             form="item-form"
-            className="min-h-[44px] rounded-md bg-neutral-900 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-neutral-700"
+            className="w-full bg-black py-5 text-[11px] font-bold uppercase tracking-[0.3em] text-white transition-colors hover:bg-neutral-800"
           >
-            Save
+            Save Changes
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full py-3 text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-400 underline underline-offset-8 hover:text-black transition-colors"
+          >
+            Cancel &amp; Discard
           </button>
         </div>
         {/* Safe area on mobile */}
@@ -1358,55 +1292,61 @@ export default function ItemsPage() {
     if (editingItem?.id === id) setDrawerOpen(false);
   };
 
-  const specSummary = (item: Item) => {
-    const total = Object.keys(item.specs || {}).length;
-    const cardKeys = item.cardSpecKeys ?? [];
-    // Only count keys that exist in specs AND have a value
-    const onCard = cardKeys.filter((k) => item.specs?.[k]).length;
-    return `${total} spec${total !== 1 ? "s" : ""}${onCard > 0 ? `, ${onCard} on card` : ""}`;
-  };
 
   return (
     <AdminShell>
-      {/* Toolbar — stacked on mobile, row on desktop */}
-      <div className="mb-4">
-        <div className="mb-3">
-          <h1 className="text-base font-medium text-neutral-900">Items</h1>
-          <p className="mt-0.5 text-xs font-light text-neutral-400">{allItems.length} items in catalogue</p>
+      {/* Toolbar */}
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1
+            className="text-5xl font-light leading-none tracking-tight text-black"
+            style={{ fontFamily: "var(--font-serif, serif)" }}
+          >
+            Archive Index
+          </h1>
+          <p
+            className="mt-2 text-base italic text-neutral-400"
+            style={{ fontFamily: "var(--font-serif, serif)" }}
+          >
+            Curating the essentials for focused scholarship.
+          </p>
+          <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">
+            {allItems.length} active monographs
+          </p>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name or brand…"
-            className="w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:border-neutral-400 sm:w-64 sm:py-1.5"
+            placeholder="Search…"
+            className="w-48 border-0 border-b border-neutral-300 bg-transparent px-0 py-1.5 text-xs text-neutral-900 outline-none placeholder:text-neutral-300 focus:border-neutral-700"
           />
           <button
             type="button"
             onClick={openAdd}
-            className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-neutral-700 sm:min-h-0 sm:py-1.5"
+            className="flex items-center gap-1.5 bg-black px-4 py-2 text-[11px] font-bold uppercase tracking-[0.12em] text-white transition-colors hover:bg-neutral-800"
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="h-3.5 w-3.5" />
             Add item
           </button>
         </div>
       </div>
 
       {/* ── Desktop + Tablet table ─────────────────────────────────────────── */}
-      <div className="hidden md:block rounded-lg border border-neutral-200 bg-white overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+      <div className="hidden md:block border border-neutral-200 bg-white overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-neutral-100 bg-neutral-50">
+            <tr className="border-b border-neutral-200 bg-neutral-50">
               {/* tablet shows: Position Image Name Brand Actions */}
               {/* desktop adds: Category Specs */}
-              <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">Position</th>
-              <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">Image</th>
-              <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">Name</th>
-              <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">Brand</th>
-              <th className="hidden px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400 lg:table-cell">Category</th>
-              <th className="hidden px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400 lg:table-cell">Specs</th>
-              <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-[0.14em] text-neutral-400">Actions</th>
+              <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Position</th>
+              <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Image</th>
+              <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Name</th>
+              <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Brand</th>
+              <th className="hidden px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 lg:table-cell">Category</th>
+              <th className="hidden px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 lg:table-cell">Specs</th>
+              <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -1417,38 +1357,57 @@ export default function ItemsPage() {
               >
                 {/* Position */}
                 <td className="px-4 py-2.5 text-xs text-neutral-500">
-                  {item.displayPosition != null ? item.displayPosition : <span className="text-neutral-300">Auto</span>}
+                  {item.displayPosition != null ? item.displayPosition : <span className="text-neutral-400">Auto</span>}
                 </td>
 
                 {/* Image */}
                 <td className="px-4 py-2.5">
-                  {isImagePending(item.imageUrl) ? (
+                  {isItemImagePipelinePending(item) ? (
                     <div className="flex h-10 w-10 items-center justify-center rounded-md bg-neutral-100">
                       <span className="text-xs text-neutral-400" aria-label="Processing">
                         ...
                       </span>
                     </div>
-                  ) : (
+                  ) : getItemImageDisplaySrc(item) ? (
                     <div className="relative h-10 w-10 overflow-hidden rounded-md bg-neutral-100">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={item.imageUrl} alt={item.name} className="h-full w-full object-contain p-0.5" />
+                      <img
+                        src={getItemImageDisplaySrc(item)}
+                        alt={item.name}
+                        className="h-full w-full object-contain p-0.5"
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex h-10 w-10 items-center justify-center rounded-md bg-neutral-100">
+                      <span className="text-[10px] text-neutral-400">—</span>
                     </div>
                   )}
                 </td>
 
                 {/* Name */}
-                <td className="px-4 py-2.5 text-xs font-medium text-neutral-800">{item.name}</td>
+                <td
+                  className="px-4 py-3 text-base font-medium text-black"
+                  style={{ fontFamily: "var(--font-serif, serif)" }}
+                >
+                  {item.name}
+                </td>
 
                 {/* Brand */}
-                <td className="px-4 py-2.5 text-xs text-neutral-500">{item.brand ?? "—"}</td>
+                <td className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-neutral-400">
+                  {item.brand ?? "—"}
+                </td>
 
                 {/* Category — desktop only */}
-                <td className="hidden px-4 py-2.5 text-xs text-neutral-500 lg:table-cell">
-                  {shortCategoryLabel(item.category)}
+                <td className="hidden px-4 py-3 lg:table-cell">
+                  <span className="border border-neutral-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-neutral-500">
+                    {shortCategoryLabel(item.category)}
+                  </span>
                 </td>
 
                 {/* Specs — desktop only */}
-                <td className="hidden px-4 py-2.5 text-xs text-neutral-400 lg:table-cell">{specSummary(item)}</td>
+                <td className="hidden px-4 py-3 text-xs text-neutral-400 lg:table-cell">
+                  {Object.values(item.specs || {}).slice(0, 2).join(", ") || "—"}
+                </td>
 
                 {/* Actions */}
                 <td className="px-4 py-2.5 text-xs">
@@ -1467,7 +1426,7 @@ export default function ItemsPage() {
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-xs text-neutral-300">
+                <td colSpan={7} className="px-4 py-8 text-center text-xs text-neutral-500">
                   No items match your search.
                 </td>
               </tr>
@@ -1477,24 +1436,32 @@ export default function ItemsPage() {
       </div>
 
       {/* ── Mobile card list ───────────────────────────────────────────────── */}
-      <div className="md:hidden space-y-2">
+      <div className="md:hidden space-y-px border border-neutral-200">
         {filtered.map((item) => (
           <div
             key={item.id}
-            className="rounded-lg border border-neutral-200 bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+            className="border-b border-neutral-100 bg-white p-3 last:border-b-0"
           >
             <div className="flex items-start gap-3">
               {/* Thumbnail */}
-              {isImagePending(item.imageUrl) ? (
+              {isItemImagePipelinePending(item) ? (
                 <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md bg-neutral-100">
                   <span className="text-xs text-neutral-400" aria-label="Processing">
                     ...
                   </span>
                 </div>
-              ) : (
+              ) : getItemImageDisplaySrc(item) ? (
                 <div className="h-10 w-10 flex-shrink-0 overflow-hidden rounded-md bg-neutral-100">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={item.imageUrl} alt={item.name} className="h-full w-full object-contain p-0.5" />
+                  <img
+                    src={getItemImageDisplaySrc(item)}
+                    alt={item.name}
+                    className="h-full w-full object-contain p-0.5"
+                  />
+                </div>
+              ) : (
+                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md bg-neutral-100">
+                  <span className="text-[10px] text-neutral-400">—</span>
                 </div>
               )}
 
@@ -1502,7 +1469,7 @@ export default function ItemsPage() {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-neutral-900">{item.name}</p>
                 <p className="text-xs text-neutral-500">{item.brand ?? "—"}</p>
-                <span className="mt-1.5 inline-block rounded-full border border-neutral-200 px-2 py-0.5 text-[11px] text-neutral-500">
+                <span className="mt-1.5 inline-block border border-neutral-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-neutral-400">
                   {shortCategoryLabel(item.category)}
                 </span>
               </div>
@@ -1529,7 +1496,7 @@ export default function ItemsPage() {
           </div>
         ))}
         {filtered.length === 0 && (
-          <p className="py-8 text-center text-xs text-neutral-300">No items match your search.</p>
+          <p className="py-8 text-center text-xs text-neutral-500">No items match your search.</p>
         )}
       </div>
 
@@ -1550,26 +1517,30 @@ export default function ItemsPage() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="delete-dialog-title"
-            className={`relative z-10 max-h-[min(90vh,32rem)] w-full max-w-md overflow-y-auto rounded-xl border border-neutral-200 bg-white p-5 shadow-lg transition-all duration-200 ease-out sm:p-6 ${
+            className={`relative z-10 max-h-[min(90vh,32rem)] w-full max-w-md overflow-y-auto border border-neutral-200 bg-white p-5 shadow-none transition-all duration-200 ease-out sm:p-6 ${
               deleteModalEntered ? "scale-100 opacity-100" : "scale-95 opacity-0"
             }`}
           >
-            <h2 id="delete-dialog-title" className="break-words text-base font-bold text-neutral-900 sm:text-lg">
+            <h2
+              id="delete-dialog-title"
+              className="break-words text-xl font-bold text-neutral-900"
+              style={{ fontFamily: "var(--font-serif, serif)" }}
+            >
               Delete {deleteTarget.name}?
             </h2>
-            <p className="mt-2 text-sm text-neutral-500">This action cannot be undone.</p>
+            <p className="mt-2 text-[11px] uppercase tracking-[0.12em] text-neutral-400">This action cannot be undone.</p>
             <div className="mt-6 flex w-full flex-row gap-3">
               <button
                 type="button"
                 onClick={() => setDeleteTarget(null)}
-                className="min-h-[44px] flex-1 rounded-md border border-neutral-200 bg-neutral-100 px-3 py-2.5 text-sm font-medium text-neutral-800 transition-colors hover:bg-neutral-200 sm:min-h-0 sm:px-5"
+                className="min-h-[44px] flex-1 border border-neutral-200 bg-white px-3 py-2.5 text-[11px] font-bold uppercase tracking-[0.12em] text-neutral-700 transition-colors hover:bg-neutral-50 sm:min-h-0 sm:px-5"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={confirmDeleteFromModal}
-                className="min-h-[44px] flex-1 rounded-md bg-red-600 px-3 py-2.5 text-sm font-medium text-white transition-colors hover:bg-red-700 sm:min-h-0 sm:px-5"
+                className="min-h-[44px] flex-1 bg-black px-3 py-2.5 text-[11px] font-bold uppercase tracking-[0.12em] text-white transition-colors hover:bg-neutral-800 sm:min-h-0 sm:px-5"
               >
                 Delete
               </button>

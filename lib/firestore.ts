@@ -35,6 +35,7 @@ import {
   ALL_BUDGET_TIERS,
 } from "@/data/studentData";
 import { coerceExternalUrl } from "@/lib/itemBuyUrl";
+import { normalizeItemImageUrl } from "@/lib/itemImageUrl";
 
 /** Coerce legacy Firestore documents to the current StudentKit Item shape. */
 function withItemDefaults(raw: Partial<Item> & { id: string }): Item {
@@ -43,7 +44,7 @@ function withItemDefaults(raw: Partial<Item> & { id: string }): Item {
     id: raw.id,
     name: raw.name ?? "",
     category: raw.category ?? "Documents & Admin",
-    imageUrl: raw.imageUrl ?? "",
+    imageUrl: normalizeItemImageUrl(raw),
     externalUrl,
     priority: raw.priority ?? "optional",
     source: raw.source ?? "either",

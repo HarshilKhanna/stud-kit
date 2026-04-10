@@ -6,17 +6,15 @@ import { ItemCard } from "./ItemCard";
 
 const container = {
   hidden: {},
-  visible: {
-    transition: { staggerChildren: 0.04, delayChildren: 0.04 },
-  },
+  visible: { transition: { staggerChildren: 0.035, delayChildren: 0.02 } },
 };
 
 const cardVariant = {
-  hidden: { opacity: 0, y: 18 },
+  hidden: { opacity: 0, y: 16 },
   visible: {
     opacity: 1,
     y: 0,
-    transition: { type: "spring" as const, stiffness: 260, damping: 24 },
+    transition: { type: "spring" as const, stiffness: 280, damping: 26 },
   },
 };
 
@@ -29,7 +27,12 @@ export function ItemGrid({ items, animationKey }: ItemGridProps) {
   if (items.length === 0) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-sm text-neutral-400">No items in this category.</p>
+        <p
+          className="text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-500"
+          style={{ fontFamily: "var(--font-sans-alt), sans-serif" }}
+        >
+          No items in this category.
+        </p>
       </div>
     );
   }
@@ -37,19 +40,14 @@ export function ItemGrid({ items, animationKey }: ItemGridProps) {
   return (
     <motion.div
       key={animationKey}
-      className="grid grid-cols-2 items-stretch gap-x-4 gap-y-6 sm:grid-cols-4 lg:grid-cols-6"
+      className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-4 lg:grid-cols-6"
       variants={container}
       initial="hidden"
       animate="visible"
     >
       <AnimatePresence>
         {items.map((item) => (
-          <motion.div
-            key={item.id}
-            variants={cardVariant}
-            layout
-            className="flex h-full min-h-0"
-          >
+          <motion.div key={item.id} variants={cardVariant} layout>
             <ItemCard item={item} />
           </motion.div>
         ))}

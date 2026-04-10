@@ -1,58 +1,79 @@
 "use client";
 
-import { AnalyticsEvent, timeAgo, CARD_CLS } from "./helpers";
+import { MousePointerClick, Home } from "lucide-react";
+import { AnalyticsEvent, timeAgo } from "./helpers";
 
-function Badge({ type }: { type: string }) {
+function EventIcon({ type }: { type: string }) {
+  const base = "flex h-8 w-8 flex-shrink-0 items-center justify-center border border-neutral-100 bg-neutral-50";
   if (type === "item_clicked") {
     return (
-      <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-600">
-        Item Clicked
+      <span className={base}>
+        <MousePointerClick className="h-3.5 w-3.5 text-neutral-500" />
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-600">
-      Accommodation
+    <span className={base}>
+      <Home className="h-3.5 w-3.5 text-neutral-500" />
     </span>
   );
 }
 
-function label(e: AnalyticsEvent): string {
-  if (e.type === "item_clicked") return e.payload?.itemName ?? e.payload?.itemId ?? "Unknown";
-  if (e.type === "accommodation_selected") return e.payload?.accommodationType ?? "Unknown";
-  return e.type;
+function eventLabel(e: AnalyticsEvent): { title: string; sub: string } {
+  if (e.type === "item_clicked") {
+    return {
+      title: e.payload?.itemName ?? e.payload?.itemId ?? "Unknown item",
+      sub:   "ITEM CLICKED",
+    };
+  }
+  if (e.type === "accommodation_selected") {
+    return {
+      title: e.payload?.accommodationType ?? "Unknown",
+      sub:   "ACCOMMODATION SELECTED",
+    };
+  }
+  return { title: e.type, sub: "EVENT" };
 }
 
 export function RecentActivityFeed({ events }: { events: AnalyticsEvent[] }) {
   const recent = events
     .filter((e) => e.type !== "item_hovered" && e.type !== "scroll_depth")
-    // Show only the latest 14 events; new ones appear at the top and push older out.
     .slice(0, 12);
 
   return (
-    <div className={`${CARD_CLS} flex flex-col p-5 lg:h-[650px]`}>
-      <h2 className="mb-4 flex-shrink-0 text-xs font-semibold uppercase tracking-[0.12em] text-neutral-400">
+    <div className="flex flex-col border border-neutral-200 bg-white p-6 md:p-8 lg:h-[520px]">
+      <h2 className="mb-5 flex-shrink-0 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">
         Recent Activity
       </h2>
 
       {recent.length === 0 ? (
-        <p className="py-8 text-center text-sm text-neutral-400">No data yet</p>
+        <p className="py-12 text-center text-[11px] uppercase tracking-widest text-neutral-500">
+          No data yet
+        </p>
       ) : (
-        <div className="space-y-2">
-          {recent.map((e) => (
-            <div
-              key={e.id}
-              className="flex items-center justify-between gap-3 border-b border-neutral-50 py-2.5 last:border-0"
-            >
-              <div className="flex min-w-0 items-center gap-2.5">
-                <Badge type={e.type} />
-                <span className="truncate text-sm text-neutral-700">{label(e)}</span>
+        <div className="flex-1 divide-y divide-neutral-50 overflow-y-auto">
+          {recent.map((e) => {
+            const { title, sub } = eventLabel(e);
+            return (
+              <div
+                key={e.id}
+                className="flex items-center justify-between gap-3 py-3"
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <EventIcon type={e.type} />
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-semibold text-black">{title}</p>
+                    <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
+                      {sub}
+                    </p>
+                  </div>
+                </div>
+                <span className="flex-shrink-0 text-[10px] uppercase tracking-widest text-neutral-500">
+                  {timeAgo(e.timestamp)}
+                </span>
               </div>
-              <span className="flex-shrink-0 text-[11px] text-neutral-400">
-                {timeAgo(e.timestamp)}
-              </span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

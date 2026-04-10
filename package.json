@@ -10,7 +10,6 @@
     "start": "next start",
     "lint": "next lint",
     "migrate": "tsx scripts/migrate.ts",
-    "migrate:images": "tsx scripts/migrate-images.ts",
     "migrate:projects": "tsx scripts/migrateProjects.ts",
     "migrate:analytics-projectid": "tsx scripts/migrate-analytics-projectId.ts",
     "migrate:project-status": "tsx scripts/migrate-project-status.ts",
