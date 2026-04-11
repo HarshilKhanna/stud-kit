@@ -71,7 +71,7 @@ export default function Home() {
 
   const [stepIdx, setStepIdx]     = useState(0);
   const [answers, setAnswers]     = useState<Answers>({});
-  const [direction, setDirection] = useState(1);
+  const [, setDirection] = useState(1);
 
   const currentStep = STEPS[stepIdx];
   const stepNum     = stepIdx + 1;

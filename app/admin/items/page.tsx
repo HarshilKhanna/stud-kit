@@ -810,8 +810,7 @@ export default function ItemsPage() {
         <div>
           <h1
             className="font-light leading-none tracking-tight text-black"
-              style={{ fontSize: "clamp(1.75rem, 4vw, 3rem)" }}
-            style={{ fontFamily: "var(--font-serif, serif)" }}
+            style={{ fontSize: "clamp(1.75rem, 4vw, 3rem)", fontFamily: "var(--font-serif, serif)" }}
           >
             Archive Index
           </h1>
