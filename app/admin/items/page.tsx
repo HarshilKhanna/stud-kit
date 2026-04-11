@@ -809,7 +809,8 @@ export default function ItemsPage() {
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1
-            className="text-5xl font-light leading-none tracking-tight text-black"
+            className="font-light leading-none tracking-tight text-black"
+              style={{ fontSize: "clamp(1.75rem, 4vw, 3rem)" }}
             style={{ fontFamily: "var(--font-serif, serif)" }}
           >
             Archive Index

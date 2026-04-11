@@ -130,7 +130,7 @@ export function StudentProfileModal({ autoOpenWhenEmpty }: StudentProfileModalPr
     <AnimatePresence>
       {profileModalOpen && (
         <motion.div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 backdrop-blur-sm sm:items-center sm:p-4"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -140,13 +140,17 @@ export function StudentProfileModal({ autoOpenWhenEmpty }: StudentProfileModalPr
           }}
         >
           <motion.div
-            className="relative w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-xl"
-            initial={{ opacity: 0, scale: 0.97, y: 8 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.97, y: 8 }}
+            className="relative w-full overflow-hidden rounded-t-2xl bg-white shadow-xl sm:max-w-lg sm:rounded-2xl"
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 40 }}
             transition={{ type: "spring", stiffness: 360, damping: 32 }}
             onMouseDown={(e) => e.stopPropagation()}
           >
+            {/* Drag handle visible on mobile */}
+            <div className="flex justify-center pt-3 sm:hidden">
+              <div className="h-1 w-10 rounded-full bg-neutral-200" />
+            </div>
             <button
               type="button"
               onClick={handleDismiss}
@@ -168,7 +172,7 @@ export function StudentProfileModal({ autoOpenWhenEmpty }: StudentProfileModalPr
               </h2>
             </div>
 
-            <div className="max-h-[min(60vh,420px)] overflow-y-auto px-6 py-5">
+            <div className="max-h-[50vh] overflow-y-auto px-5 py-4 sm:max-h-[min(60vh,420px)] sm:px-6 sm:py-5">
               {step === 1 && (
                 <div className="space-y-3">
                   <div className="relative">

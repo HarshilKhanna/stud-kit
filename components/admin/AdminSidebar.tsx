@@ -108,7 +108,7 @@ export function AdminSidebar({ mobileOpen = false, onClose }: AdminSidebarProps)
   return (
     <>
       {/* Desktop */}
-      <div className="hidden h-screen flex-shrink-0 md:flex">{sidebarContent}</div>
+      <div className="hidden h-dvh flex-shrink-0 md:flex">{sidebarContent}</div>
 
       {/* Mobile drawer */}
       <div

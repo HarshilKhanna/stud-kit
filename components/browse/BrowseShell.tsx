@@ -165,16 +165,19 @@ export function BrowseShell({ projectId }: { projectId?: string }) {
       <StudentProfileModal />
 
       {/* ── Editorial page header ── */}
-      <div className="px-8 pb-6 pt-10 md:px-16">
-        <div className="flex items-baseline justify-between">
+      <div className="px-4 pb-5 pt-6 sm:px-5 sm:pb-6 sm:pt-8 md:px-8 md:pt-10">
+        <div className="flex items-baseline justify-between gap-2">
           <h1
-            className="text-5xl font-semibold tracking-tighter text-black md:text-6xl"
-            style={{ fontFamily: "var(--font-serif), serif" }}
+            className="font-semibold tracking-tighter text-black"
+            style={{
+              fontFamily: "var(--font-serif), serif",
+              fontSize: "clamp(1.75rem, 5vw, 3.5rem)",
+            }}
           >
             The Essentials
           </h1>
-          <span className="hidden text-[10px] font-semibold uppercase tracking-[0.18em] text-neutral-400 md:block">
-            {visibleItems.length} items curated for success
+          <span className="flex-shrink-0 text-[10px] font-semibold uppercase tracking-[0.18em] text-neutral-400">
+            {visibleItems.length} items
           </span>
         </div>
       </div>
@@ -190,15 +193,15 @@ export function BrowseShell({ projectId }: { projectId?: string }) {
 
       {/* No-profile prompt */}
       {studentProfile == null && (
-        <div className="mx-auto max-w-none px-8 pt-6 md:px-16">
-          <div className="flex flex-col gap-3 border border-neutral-200 bg-neutral-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="px-4 pt-4 sm:px-5 sm:pt-6 md:px-8">
+          <div className="flex flex-col gap-3 border border-neutral-200 bg-neutral-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500">
               Set your destination to get a personalised list and timeline.
             </p>
             <button
               type="button"
               onClick={() => openProfileModal()}
-              className="flex-shrink-0 rounded-full bg-black px-5 py-2 text-[10px] font-bold uppercase tracking-widest text-white transition-colors hover:bg-neutral-800"
+              className="w-full flex-shrink-0 rounded-full bg-black px-5 py-2.5 text-[10px] font-bold uppercase tracking-widest text-white transition-colors hover:bg-neutral-800 sm:w-auto sm:py-2"
             >
               Set my profile
             </button>
@@ -207,7 +210,7 @@ export function BrowseShell({ projectId }: { projectId?: string }) {
       )}
 
       {/* Grid */}
-      <section className="px-8 pb-24 pt-8 md:px-16">
+      <section className="px-4 pb-24 pt-6 sm:px-5 sm:pt-8 md:px-8">
         {showPriorityLayout ? (
           <PrioritySections items={visibleItems} animationKey={animationKey} />
         ) : (

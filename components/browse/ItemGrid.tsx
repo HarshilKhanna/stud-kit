@@ -40,7 +40,7 @@ export function ItemGrid({ items, animationKey }: ItemGridProps) {
   return (
     <motion.div
       key={animationKey}
-      className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-4 lg:grid-cols-6"
+      className="grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-3 sm:gap-x-4 sm:gap-y-8 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
       variants={container}
       initial="hidden"
       animate="visible"

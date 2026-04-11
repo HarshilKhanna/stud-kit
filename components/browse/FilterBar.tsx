@@ -292,11 +292,11 @@ export function FilterBar({
   return (
     <>
       <div
-        className="sticky top-[60px] z-20 border-b border-neutral-200/60 bg-[#F9F9F9]"
+        className="sticky top-[54px] z-20 border-b border-neutral-200/60 bg-[#F9F9F9] sm:top-[56px] md:top-[62px]"
         style={{ fontFamily: "var(--font-sans-alt), sans-serif" }}
       >
         {/* ── Desktop ── */}
-        <div className="hidden px-8 md:block md:px-16">
+        <div className="hidden px-5 md:block md:px-8">
           <div className="flex items-end gap-6 pt-4 pb-0">
             {/* Category tabs */}
             <div
@@ -338,7 +338,7 @@ export function FilterBar({
         </div>
 
         {/* ── Mobile ── */}
-        <div className="flex items-center gap-2 px-6 py-3 md:hidden">
+        <div className="flex items-center gap-2 px-5 py-3 md:hidden">
           <button
             type="button"
             onClick={() => setFilterOpen(true)}

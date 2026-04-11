@@ -19,44 +19,72 @@ export function OverviewCards({ events }: { events: AnalyticsEvent[] }) {
     "solo-apt":         "Solo Apt",
   };
 
+  const cells = [
+    {
+      label: "Total Clicks",
+      value: String(totalClicks),
+      sub: null,
+      large: true,
+    },
+    {
+      label: "Today",
+      value: String(todayClicks),
+      sub: null,
+      large: true,
+    },
+    {
+      label: "Most Clicked Item",
+      value: topItem,
+      sub: "Top performer",
+      large: false,
+    },
+    {
+      label: "Top Accommodation",
+      value: ACCOM_LABEL[topAccom] ?? topAccom,
+      sub: "Most selected",
+      large: false,
+    },
+  ];
+
   return (
-    <div className="flex divide-x divide-neutral-100 border border-neutral-200 bg-white">
-      {/* Compact numeric cells */}
-      <div className="w-36 flex-shrink-0 px-6 py-5">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-neutral-400">
-          Total Clicks
-        </p>
-        <p className="mt-2 text-3xl font-light text-black" style={{ fontFamily: "var(--font-serif, serif)" }}>
-          {totalClicks}
-        </p>
-      </div>
-      <div className="w-36 flex-shrink-0 px-6 py-5">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-neutral-400">
-          Today
-        </p>
-        <p className="mt-2 text-3xl font-light text-black" style={{ fontFamily: "var(--font-serif, serif)" }}>
-          {todayClicks}
-        </p>
-      </div>
-      {/* Expanding text cells */}
-      <div className="min-w-0 flex-1 px-6 py-5">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-neutral-400">
-          Most Clicked Item
-        </p>
-        <p className="mt-2 truncate text-lg font-semibold text-black" style={{ fontFamily: "var(--font-serif, serif)" }} title={topItem}>
-          {topItem}
-        </p>
-        <p className="mt-0.5 text-[9px] uppercase tracking-[0.14em] text-neutral-400">Top performer</p>
-      </div>
-      <div className="min-w-0 flex-1 px-6 py-5">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-neutral-400">
-          Top Accommodation
-        </p>
-        <p className="mt-2 truncate text-lg font-semibold text-black" style={{ fontFamily: "var(--font-serif, serif)" }} title={topAccom}>
-          {ACCOM_LABEL[topAccom] ?? topAccom}
-        </p>
-        <p className="mt-0.5 text-[9px] uppercase tracking-[0.14em] text-neutral-400">Most selected</p>
-      </div>
+    /* auto-fit: each cell is at least 120px, grows to fill */
+    <div
+      className="border border-neutral-200 bg-white"
+      style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))" }}
+    >
+      {cells.map(({ label, value, sub, large }, idx) => (
+        <div
+          key={label}
+          className="min-w-0 px-5 py-4"
+          style={{
+            borderRight: idx < cells.length - 1 ? "1px solid #f5f5f5" : undefined,
+            borderBottom: "1px solid #f5f5f5",
+          }}
+        >
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-neutral-400">
+            {label}
+          </p>
+          {large ? (
+            <p
+              className="mt-2 text-3xl font-light text-black"
+              style={{ fontFamily: "var(--font-serif, serif)" }}
+            >
+              {value}
+            </p>
+          ) : (
+            <p
+              className="mt-2 truncate text-base font-semibold text-black"
+              style={{ fontFamily: "var(--font-serif, serif)" }}
+              title={value}
+            >
+              {value}
+            </p>
+          )}
+          {sub && (
+            <p className="mt-0.5 text-[9px] uppercase tracking-[0.14em] text-neutral-400">{sub}</p>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

@@ -38,11 +38,11 @@ export default function AnalyticsPage() {
   return (
     <AdminShell>
       {/* Header */}
-      <div className="mb-8 flex items-baseline justify-between border-b border-neutral-100 pb-6">
+      <div className="mb-6 flex flex-wrap items-baseline justify-between gap-4 border-b border-neutral-100 pb-5 md:mb-8 md:pb-6">
         <div>
           <h1
-            className="text-5xl font-light leading-none tracking-tight text-black"
-            style={{ fontFamily: "var(--font-serif, serif)" }}
+            className="font-light leading-none tracking-tight text-black"
+            style={{ fontFamily: "var(--font-serif, serif)", fontSize: "clamp(1.75rem, 4vw, 3rem)" }}
           >
             Analytics
           </h1>
@@ -50,7 +50,7 @@ export default function AnalyticsPage() {
             Real-time engagement data.
           </p>
         </div>
-        <div className="text-right">
+        <div>
           <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-neutral-400">
             Live · Updated
           </p>

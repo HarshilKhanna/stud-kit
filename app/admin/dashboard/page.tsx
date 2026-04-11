@@ -60,10 +60,11 @@ export default function DashboardPage() {
   return (
     <AdminShell>
       {/* Header */}
-      <header className="mb-8 flex flex-col gap-2 md:flex-row md:items-baseline md:justify-between">
+      <header className="mb-6 flex flex-col gap-2 md:mb-8 md:flex-row md:items-baseline md:justify-between">
         <div>
           <h1
-            className="text-5xl font-light leading-none tracking-tight text-black"
+            className="font-light leading-none tracking-tight text-black"
+            style={{ fontSize: "clamp(1.75rem, 4vw, 3rem)" }}
             style={{ fontFamily: "var(--font-serif, serif)" }}
           >
             Dashboard
@@ -108,7 +109,7 @@ export default function DashboardPage() {
 
       {/* Compact metrics strip */}
       <div className="mb-8 grid grid-cols-2 divide-x divide-y divide-neutral-100 border border-neutral-200 bg-white sm:grid-cols-3 lg:grid-cols-5 lg:divide-y-0">
-        <div className="px-6 py-5">
+        <div className="px-4 py-4 sm:px-6 sm:py-5">
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-neutral-500">
             Total Items
           </p>
@@ -120,7 +121,7 @@ export default function DashboardPage() {
           </p>
         </div>
         {BROWSE_CATEGORY_CHIPS.slice(0, 4).map((chip) => (
-          <div key={chip} className="px-6 py-5">
+          <div key={chip} className="px-4 py-4 sm:px-6 sm:py-5">
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-neutral-500">
               {chip}
             </p>
